@@ -1,0 +1,48 @@
+import type { Octokit } from '@octokit/rest';
+import type { FetchResult } from '@shipit-ai/connector-sdk';
+
+export interface GitHubRepo {
+  name: string;
+  full_name: string;
+  html_url: string;
+  default_branch: string;
+  visibility: string;
+  language: string | null;
+  topics: string[];
+  archived: boolean;
+  description: string | null;
+}
+
+export async function fetchRepositories(
+  octokit: Octokit,
+  org: string,
+  cursor?: string,
+): Promise<FetchResult> {
+  const page = cursor ? Number(cursor) : 1;
+  const perPage = 100;
+
+  const { data } = await octokit.rest.repos.listForOrg({
+    org,
+    per_page: perPage,
+    page,
+    type: 'all',
+  });
+
+  const entities: GitHubRepo[] = data.map((repo) => ({
+    name: repo.name,
+    full_name: repo.full_name,
+    html_url: repo.html_url,
+    default_branch: repo.default_branch ?? 'main',
+    visibility: repo.visibility ?? 'private',
+    language: repo.language ?? null,
+    topics: repo.topics ?? [],
+    archived: repo.archived ?? false,
+    description: repo.description ?? null,
+  }));
+
+  return {
+    entities,
+    cursor: data.length === perPage ? String(page + 1) : undefined,
+    has_more: data.length === perPage,
+  };
+}
