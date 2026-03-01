@@ -1,0 +1,339 @@
+import type { ShipItSchema } from '../types/schema.js';
+
+export const DEFAULT_SCHEMA: ShipItSchema = {
+  version: '1.0',
+  mode: 'full',
+  node_types: {
+    LogicalService: {
+      description: 'A named, team-owned service concept',
+      properties: {
+        name: {
+          type: 'string',
+          required: true,
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        tier: {
+          type: 'integer',
+          required: false,
+          resolution_strategy: 'MANUAL_OVERRIDE_FIRST',
+        },
+        owner: {
+          type: 'string',
+          required: false,
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        lifecycle: {
+          type: 'string',
+          enum: ['experimental', 'production', 'deprecated', 'decommissioned'],
+          resolution_strategy: 'LATEST_TIMESTAMP',
+        },
+        language: {
+          type: 'string',
+          resolution_strategy: 'AUTHORITATIVE_ORDER',
+        },
+        domain: {
+          type: 'string',
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        tags: {
+          type: 'string[]',
+          resolution_strategy: 'MERGE_SET',
+        },
+        description: {
+          type: 'string',
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+      },
+      constraints: { unique_key: 'name' },
+    },
+    Repository: {
+      description: 'A source code repository',
+      properties: {
+        name: {
+          type: 'string',
+          required: true,
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        url: { type: 'string', resolution_strategy: 'LATEST_TIMESTAMP' },
+        default_branch: {
+          type: 'string',
+          resolution_strategy: 'LATEST_TIMESTAMP',
+        },
+        visibility: {
+          type: 'string',
+          enum: ['public', 'private', 'internal'],
+          resolution_strategy: 'LATEST_TIMESTAMP',
+        },
+        language: {
+          type: 'string',
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        topics: { type: 'string[]', resolution_strategy: 'MERGE_SET' },
+      },
+      constraints: { unique_key: 'name' },
+    },
+    Deployment: {
+      description: 'A running instance in a specific environment/cluster',
+      properties: {
+        name: {
+          type: 'string',
+          required: true,
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        namespace: {
+          type: 'string',
+          resolution_strategy: 'LATEST_TIMESTAMP',
+        },
+        cluster: { type: 'string', resolution_strategy: 'LATEST_TIMESTAMP' },
+        environment: {
+          type: 'string',
+          resolution_strategy: 'LATEST_TIMESTAMP',
+        },
+        image: { type: 'string', resolution_strategy: 'LATEST_TIMESTAMP' },
+        replicas: {
+          type: 'integer',
+          resolution_strategy: 'LATEST_TIMESTAMP',
+        },
+        status: { type: 'string', resolution_strategy: 'LATEST_TIMESTAMP' },
+      },
+      constraints: { unique_key: 'name' },
+    },
+    RuntimeService: {
+      description: 'The identity seen by observability tools',
+      properties: {
+        name: {
+          type: 'string',
+          required: true,
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        dd_service: {
+          type: 'string',
+          resolution_strategy: 'LATEST_TIMESTAMP',
+        },
+        apm_name: {
+          type: 'string',
+          resolution_strategy: 'LATEST_TIMESTAMP',
+        },
+        environment: {
+          type: 'string',
+          resolution_strategy: 'LATEST_TIMESTAMP',
+        },
+      },
+      constraints: { unique_key: 'name' },
+    },
+    BuildArtifact: {
+      description: 'A built container image or binary',
+      properties: {
+        name: {
+          type: 'string',
+          required: true,
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        image_tag: {
+          type: 'string',
+          resolution_strategy: 'LATEST_TIMESTAMP',
+        },
+        sha: { type: 'string', resolution_strategy: 'LATEST_TIMESTAMP' },
+        registry: {
+          type: 'string',
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+      },
+      constraints: { unique_key: 'name' },
+    },
+    Environment: {
+      description: 'A deployment target environment',
+      properties: {
+        name: {
+          type: 'string',
+          required: true,
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        type: {
+          type: 'string',
+          enum: ['development', 'staging', 'production'],
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        region: { type: 'string', resolution_strategy: 'LATEST_TIMESTAMP' },
+        classification: {
+          type: 'string',
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+      },
+      constraints: { unique_key: 'name' },
+    },
+    Team: {
+      description: 'An engineering team or squad',
+      properties: {
+        name: {
+          type: 'string',
+          required: true,
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        slug: { type: 'string', resolution_strategy: 'HIGHEST_CONFIDENCE' },
+        description: {
+          type: 'string',
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+      },
+      constraints: { unique_key: 'name' },
+    },
+    Person: {
+      description: 'An individual (engineer, PM, etc.)',
+      properties: {
+        name: {
+          type: 'string',
+          required: true,
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        email: { type: 'string', resolution_strategy: 'HIGHEST_CONFIDENCE' },
+        github_handle: {
+          type: 'string',
+          resolution_strategy: 'LATEST_TIMESTAMP',
+        },
+        role: { type: 'string', resolution_strategy: 'HIGHEST_CONFIDENCE' },
+      },
+      constraints: { unique_key: 'email' },
+    },
+    Pipeline: {
+      description: 'A CI/CD workflow',
+      properties: {
+        name: {
+          type: 'string',
+          required: true,
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        trigger: { type: 'string', resolution_strategy: 'LATEST_TIMESTAMP' },
+        status: { type: 'string', resolution_strategy: 'LATEST_TIMESTAMP' },
+        last_run: { type: 'string', resolution_strategy: 'LATEST_TIMESTAMP' },
+      },
+      constraints: { unique_key: 'name' },
+    },
+    Monitor: {
+      description: 'An observability check (alert, SLO)',
+      properties: {
+        name: {
+          type: 'string',
+          required: true,
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        type: { type: 'string', resolution_strategy: 'HIGHEST_CONFIDENCE' },
+        query: { type: 'string', resolution_strategy: 'LATEST_TIMESTAMP' },
+        status: { type: 'string', resolution_strategy: 'LATEST_TIMESTAMP' },
+        threshold: {
+          type: 'string',
+          resolution_strategy: 'LATEST_TIMESTAMP',
+        },
+      },
+      constraints: { unique_key: 'name' },
+    },
+    Namespace: {
+      description: 'A Kubernetes namespace',
+      properties: {
+        name: {
+          type: 'string',
+          required: true,
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        cluster: { type: 'string', resolution_strategy: 'LATEST_TIMESTAMP' },
+        labels: { type: 'string[]', resolution_strategy: 'MERGE_SET' },
+      },
+      constraints: { unique_key: 'name' },
+    },
+    Cluster: {
+      description: 'A Kubernetes cluster',
+      properties: {
+        name: {
+          type: 'string',
+          required: true,
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        provider: {
+          type: 'string',
+          resolution_strategy: 'HIGHEST_CONFIDENCE',
+        },
+        region: { type: 'string', resolution_strategy: 'LATEST_TIMESTAMP' },
+        version: { type: 'string', resolution_strategy: 'LATEST_TIMESTAMP' },
+      },
+      constraints: { unique_key: 'name' },
+    },
+  },
+  relationship_types: {
+    IMPLEMENTED_BY: {
+      from: 'LogicalService',
+      to: 'Repository',
+      cardinality: '1:N',
+      description: 'LogicalService is implemented by this repo',
+    },
+    DEPLOYED_AS: {
+      from: 'LogicalService',
+      to: 'Deployment',
+      cardinality: '1:N',
+      description: 'LogicalService has this running deployment',
+    },
+    EMITS_TELEMETRY_AS: {
+      from: 'Deployment',
+      to: 'RuntimeService',
+      cardinality: 'N:M',
+      description: 'Deployment is observed as this RuntimeService',
+    },
+    BUILT_FROM: {
+      from: 'BuildArtifact',
+      to: 'Repository',
+      cardinality: 'N:1',
+    },
+    RUNS_IMAGE: {
+      from: 'Deployment',
+      to: 'BuildArtifact',
+      cardinality: 'N:1',
+    },
+    RUNS_IN_ENV: {
+      from: 'Deployment',
+      to: 'Environment',
+      cardinality: 'N:1',
+    },
+    DEPENDS_ON: {
+      from: 'LogicalService',
+      to: 'LogicalService',
+      cardinality: 'N:M',
+    },
+    CALLS: {
+      from: 'RuntimeService',
+      to: 'RuntimeService',
+      cardinality: 'N:M',
+    },
+    OWNS: { from: 'Team', to: 'LogicalService', cardinality: '1:N' },
+    MEMBER_OF: { from: 'Person', to: 'Team', cardinality: 'N:M' },
+    CONTRIBUTES_TO: {
+      from: 'Person',
+      to: 'Repository',
+      cardinality: 'N:M',
+    },
+    RUNS_IN: { from: 'Deployment', to: 'Namespace', cardinality: 'N:1' },
+    PART_OF: { from: 'Namespace', to: 'Cluster', cardinality: 'N:1' },
+    BUILT_BY: {
+      from: 'LogicalService',
+      to: 'Pipeline',
+      cardinality: '1:N',
+    },
+    TRIGGERS: { from: 'Pipeline', to: 'Pipeline', cardinality: 'N:M' },
+    MONITORS: {
+      from: 'Monitor',
+      to: 'LogicalService',
+      cardinality: 'N:M',
+    },
+    CODEOWNER_OF: { from: 'Person', to: 'Repository', cardinality: 'N:M' },
+    ON_CALL_FOR: {
+      from: 'Person',
+      to: 'LogicalService',
+      cardinality: 'N:M',
+    },
+  },
+  resolution_defaults: {
+    owner: 'HIGHEST_CONFIDENCE',
+    tier: 'MANUAL_OVERRIDE_FIRST',
+    status: 'LATEST_TIMESTAMP',
+    tags: 'MERGE_SET',
+    name: 'HIGHEST_CONFIDENCE',
+  },
+};
