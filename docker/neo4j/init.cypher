@@ -25,11 +25,14 @@ CREATE INDEX person_email IF NOT EXISTS FOR (n:Person) ON (n.email);
 CREATE INDEX last_synced IF NOT EXISTS FOR (n:LogicalService) ON (n._last_synced);
 CREATE INDEX source_system IF NOT EXISTS FOR (n:LogicalService) ON (n._source_system);
 
-// Linking key constraint
+// Linking key index (Core Writer identity reconciliation)
 CREATE CONSTRAINT linking_key IF NOT EXISTS FOR (n:LinkingKey) REQUIRE n.key IS UNIQUE;
+CREATE CONSTRAINT _linking_key IF NOT EXISTS FOR (n:_LinkingKey) REQUIRE n.linking_key IS UNIQUE;
 
-// Idempotency log
+// Idempotency log (Core Writer duplicate detection)
 CREATE CONSTRAINT idempotency_key IF NOT EXISTS FOR (n:IdempotencyLog) REQUIRE n.key IS UNIQUE;
+CREATE CONSTRAINT _idempotency_key IF NOT EXISTS FOR (n:_IdempotencyLog) REQUIRE n.key IS UNIQUE;
+CREATE INDEX _idempotency_expires IF NOT EXISTS FOR (n:_IdempotencyLog) ON (n.expires_at);
 
 // Schema meta-nodes (ADR-009)
 CREATE CONSTRAINT schema_node_type IF NOT EXISTS FOR (n:SchemaNodeType) REQUIRE n.label IS UNIQUE;
