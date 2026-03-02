@@ -9,14 +9,14 @@ import { GraphControls } from '@/components/graph/graph-controls';
 import { FilterPanel } from '@/components/graph/filter-panel';
 import { NodeDetailPanel } from '@/components/graph/node-detail-panel';
 import { useGraphStore } from '@/stores/graph-store';
-import { mockGraphData } from '@/lib/mock-data';
+import { useInitialGraphData } from '@/lib/hooks/use-graph-data';
 
 export default function GraphExplorerPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { selectedNode, setSelectedNode } = useGraphStore();
 
-  const graphData = mockGraphData;
+  const { data: graphData } = useInitialGraphData();
 
   const handleNodeClick = useCallback(
     (nodeId: string) => {
@@ -57,11 +57,17 @@ export default function GraphExplorerPage() {
         </div>
 
         <div className="relative flex-1">
-          <GraphCanvas data={graphData} onNodeClick={handleNodeClick} />
+          {graphData ? (
+            <GraphCanvas data={graphData} onNodeClick={handleNodeClick} />
+          ) : (
+            <div className="flex h-full items-center justify-center text-muted-foreground">
+              <p>No graph data yet. Seed data with <code className="bg-muted px-1.5 py-0.5 rounded text-xs">pnpm seed</code> to get started.</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {selectedNode && (
+      {selectedNode && graphData && (
         <NodeDetailPanel
           nodeId={selectedNode}
           graphData={graphData}

@@ -1,10 +1,10 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import { RefreshCw, GitMerge, Settings, Plus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { mockActivity } from '@/lib/mock-data';
-import type { ActivityEvent } from '@/lib/api';
+import { fetchActivity, type ActivityEvent } from '@/lib/api';
 
 function formatRelativeTime(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime();
@@ -24,7 +24,12 @@ const eventIcons: Record<ActivityEvent['type'], React.ReactNode> = {
 };
 
 export function ActivityFeed() {
-  const events = mockActivity;
+  const { data: events = [] } = useQuery<ActivityEvent[]>({
+    queryKey: ['activity'],
+    queryFn: fetchActivity,
+    retry: 1,
+    refetchInterval: 30_000,
+  });
 
   return (
     <Card>
@@ -34,17 +39,21 @@ export function ActivityFeed() {
       <CardContent className="p-0">
         <ScrollArea className="h-[280px] px-6 pb-4">
           <div className="space-y-3">
-            {events.map((event) => (
-              <div key={event.id} className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted">
-                  {eventIcons[event.type]}
+            {events.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">No activity yet</p>
+            ) : (
+              events.map((event) => (
+                <div key={event.id} className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted">
+                    {eventIcons[event.type]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm leading-snug">{event.message}</p>
+                    <p className="text-xs text-muted-foreground">{formatRelativeTime(event.timestamp)}</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm leading-snug">{event.message}</p>
-                  <p className="text-xs text-muted-foreground">{formatRelativeTime(event.timestamp)}</p>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </ScrollArea>
       </CardContent>
