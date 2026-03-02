@@ -20,8 +20,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@shipit-ai/shared": "*",
-    "@shipit-ai/event-bus": "*"
+    "@shipit-ai/shared": "workspace:*",
+    "@shipit-ai/event-bus": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

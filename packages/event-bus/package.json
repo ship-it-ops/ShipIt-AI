@@ -22,7 +22,7 @@
   "dependencies": {
     "bullmq": "^5.34.0",
     "ioredis": "^5.4.0",
-    "@shipit-ai/shared": "*"
+    "@shipit-ai/shared": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

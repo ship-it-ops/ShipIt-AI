@@ -21,8 +21,8 @@
   },
   "dependencies": {
     "@kubernetes/client-node": "^1.0.0",
-    "@shipit-ai/connector-sdk": "*",
-    "@shipit-ai/shared": "*"
+    "@shipit-ai/connector-sdk": "workspace:*",
+    "@shipit-ai/shared": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

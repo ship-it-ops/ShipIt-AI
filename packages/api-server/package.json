@@ -25,8 +25,8 @@
     "@fastify/swagger": "^8.15.0",
     "neo4j-driver": "^5.27.0",
     "yaml": "^2.7.0",
-    "@shipit-ai/shared": "*",
-    "@shipit-ai/event-bus": "*"
+    "@shipit-ai/shared": "workspace:*",
+    "@shipit-ai/event-bus": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
