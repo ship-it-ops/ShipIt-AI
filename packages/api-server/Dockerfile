@@ -1,11 +1,12 @@
 FROM node:20-alpine AS builder
+RUN corepack enable pnpm
 WORKDIR /app
-COPY package*.json turbo.json tsconfig.base.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
 COPY packages/shared/ packages/shared/
 COPY packages/event-bus/ packages/event-bus/
 COPY packages/api-server/ packages/api-server/
-RUN npm ci
-RUN npx turbo build --filter=@shipit-ai/api-server
+RUN pnpm install --frozen-lockfile
+RUN pnpm turbo build --filter=@shipit-ai/api-server
 
 FROM node:20-alpine
 WORKDIR /app
