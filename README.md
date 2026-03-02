@@ -9,7 +9,7 @@ ShipIt-AI discovers, maps, and maintains your software ecosystem as a queryable 
 ## Architecture
 
 ```
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+┌──────────────┐  ┌─────────────┐  ┌─────────────┐
 │   GitHub     │  │ Kubernetes  │  │  Custom...  │
 │  Connector   │  │  Connector  │  │  Connector  │
 └──────┬───────┘  └──────┬──────┘  └──────┬──────┘

@@ -9,7 +9,15 @@
     "test:watch": "turbo test:watch",
     "lint": "turbo lint",
     "clean": "turbo clean",
-    "typecheck": "turbo typecheck"
+    "typecheck": "turbo typecheck",
+    "setup": "bash scripts/setup.sh",
+    "start:infra": "bash scripts/infra.sh",
+    "start:backend": "bash scripts/infra.sh && turbo dev --filter=@shipit-ai/api-server --filter=@shipit-ai/core-writer",
+    "start:frontend": "turbo dev --filter=@shipit-ai/web-ui",
+    "start:mcp": "turbo dev --filter=@shipit-ai/mcp-server",
+    "start:all": "bash scripts/infra.sh && turbo dev",
+    "seed": "npx tsx scripts/seed-demo.ts",
+    "stop": "docker compose -f docker/docker-compose.yml down"
   },
   "devDependencies": {
     "turbo": "^2.4.0",
