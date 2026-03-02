@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 RUN corepack enable pnpm
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
@@ -8,7 +8,7 @@ COPY packages/core-writer/ packages/core-writer/
 RUN pnpm install --frozen-lockfile
 RUN pnpm turbo build --filter=@shipit-ai/core-writer
 
-FROM node:20-alpine
+FROM node:22-alpine
 WORKDIR /app
 COPY --from=builder /app/packages/core-writer/dist ./dist
 COPY --from=builder /app/packages/core-writer/package.json ./
