@@ -30,30 +30,30 @@ function StatCard({ label, value, icon, color }: StatCardProps) {
 export function StatsCards() {
   const { data: stats } = useGraphStats();
 
-  if (!stats) return null;
+  const byLabel = stats?.nodesByLabel ?? {};
 
   const cards: StatCardProps[] = [
     {
       label: 'Services',
-      value: (stats.nodesByLabel.LogicalService ?? 0) + (stats.nodesByLabel.RuntimeService ?? 0),
+      value: (byLabel.LogicalService ?? 0) + (byLabel.RuntimeService ?? 0),
       icon: <Server className="h-5 w-5 text-blue-600" />,
       color: 'bg-blue-100',
     },
     {
       label: 'Repositories',
-      value: stats.nodesByLabel.Repository ?? 0,
+      value: byLabel.Repository ?? 0,
       icon: <GitFork className="h-5 w-5 text-green-600" />,
       color: 'bg-green-100',
     },
     {
       label: 'Deployments',
-      value: stats.nodesByLabel.Deployment ?? 0,
+      value: byLabel.Deployment ?? 0,
       icon: <Rocket className="h-5 w-5 text-orange-600" />,
       color: 'bg-orange-100',
     },
     {
       label: 'Teams',
-      value: stats.nodesByLabel.Team ?? 0,
+      value: byLabel.Team ?? 0,
       icon: <Users className="h-5 w-5 text-teal-600" />,
       color: 'bg-teal-100',
     },

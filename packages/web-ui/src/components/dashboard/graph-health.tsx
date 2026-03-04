@@ -17,12 +17,11 @@ function formatRelativeTime(isoString: string): string {
 export function GraphHealth() {
   const { data: stats } = useGraphStats();
 
-  if (!stats) return null;
-
+  const healthScore = stats?.healthScore ?? 0;
   const healthColor =
-    stats.healthScore >= 90
+    healthScore >= 90
       ? 'text-emerald-500'
-      : stats.healthScore >= 70
+      : healthScore >= 70
       ? 'text-amber-500'
       : 'text-red-500';
 
@@ -37,7 +36,7 @@ export function GraphHealth() {
       <CardContent>
         <div className="flex items-center gap-6">
           <div className="text-center">
-            <div className={`text-3xl font-bold ${healthColor}`}>{stats.healthScore}%</div>
+            <div className={`text-3xl font-bold ${healthColor}`}>{healthScore}%</div>
             <div className="text-xs text-muted-foreground">Health Score</div>
           </div>
           <div className="flex-1 space-y-2">
@@ -46,25 +45,25 @@ export function GraphHealth() {
                 <Database className="h-3.5 w-3.5" />
                 Nodes
               </span>
-              <span className="font-medium">{stats.nodeCount.toLocaleString()}</span>
+              <span className="font-medium">{(stats?.nodeCount ?? 0).toLocaleString()}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="flex items-center gap-1.5 text-muted-foreground">
                 <GitBranch className="h-3.5 w-3.5" />
                 Edges
               </span>
-              <span className="font-medium">{stats.edgeCount.toLocaleString()}</span>
+              <span className="font-medium">{(stats?.edgeCount ?? 0).toLocaleString()}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="flex items-center gap-1.5 text-muted-foreground">
                 <Clock className="h-3.5 w-3.5" />
                 Staleness
               </span>
-              <span className="font-medium">{stats.staleness}%</span>
+              <span className="font-medium">{stats?.staleness ?? 0}%</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Last Sync</span>
-              <span className="font-medium">{formatRelativeTime(stats.lastSync)}</span>
+              <span className="font-medium">{stats?.lastSync ? formatRelativeTime(stats.lastSync) : 'Never'}</span>
             </div>
           </div>
         </div>
