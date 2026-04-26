@@ -17,6 +17,7 @@
     "start:mcp": "turbo dev --filter=@shipit-ai/mcp-server",
     "start:all": "bash scripts/infra.sh && turbo dev",
     "seed": "tsx scripts/seed-demo.ts",
+    "seed:reset": "tsx scripts/seed-reset.ts",
     "stop": "docker compose -f docker/docker-compose.yml down",
     "stop:clean": "docker compose -f docker/docker-compose.yml down -v"
   },

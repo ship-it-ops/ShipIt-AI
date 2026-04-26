@@ -15,6 +15,14 @@ const graphRoutes: FastifyPluginAsync = async (server) => {
     return neo4j.getGraphStats();
   });
 
+  // GET /api/graph/overview
+  server.get<{
+    Querystring: { limit?: string };
+  }>('/overview', async (request) => {
+    const limit = Math.min(Number(request.query.limit ?? 100), 500);
+    return neo4j.getOverview(limit);
+  });
+
   // GET /api/graph/neighborhood/:id
   server.get<{
     Params: { id: string };

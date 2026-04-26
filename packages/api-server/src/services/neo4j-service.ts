@@ -1,10 +1,13 @@
 import neo4j, { type Driver, type Record as Neo4jRecord } from 'neo4j-driver';
 
 export interface GraphStats {
-  totalNodes: number;
-  totalEdges: number;
-  nodeCountsByLabel: Record<string, number>;
+  nodeCount: number;
+  edgeCount: number;
+  nodesByLabel: Record<string, number>;
   edgeCountsByType: Record<string, number>;
+  staleness: number;
+  lastSync: string;
+  healthScore: number;
 }
 
 export interface CytoscapeNode {
@@ -45,27 +48,27 @@ export class Neo4jService {
       'CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType, COUNT { MATCH ()-[r]->() WHERE type(r) = relationshipType } AS count',
     );
 
-    const nodeCountsByLabel: Record<string, number> = {};
-    let totalNodes = 0;
+    const nodesByLabel: Record<string, number> = {};
+    let nodeCount = 0;
     for (const record of nodeCountsResult) {
       const label = record.get('label') as string;
       const count = (record.get('count') as { toNumber?: () => number });
       const num = typeof count === 'object' && count?.toNumber ? count.toNumber() : Number(count);
-      nodeCountsByLabel[label] = num;
-      totalNodes += num;
+      nodesByLabel[label] = num;
+      nodeCount += num;
     }
 
     const edgeCountsByType: Record<string, number> = {};
-    let totalEdges = 0;
+    let edgeCount = 0;
     for (const record of edgeCountsResult) {
       const relType = record.get('relationshipType') as string;
       const count = (record.get('count') as { toNumber?: () => number });
       const num = typeof count === 'object' && count?.toNumber ? count.toNumber() : Number(count);
       edgeCountsByType[relType] = num;
-      totalEdges += num;
+      edgeCount += num;
     }
 
-    return { totalNodes, totalEdges, nodeCountsByLabel, edgeCountsByType };
+    return { nodeCount, edgeCount, nodesByLabel, edgeCountsByType, staleness: 0, lastSync: new Date().toISOString(), healthScore: 100 };
   }
 
   async getNeighborhood(nodeId: string, depth: number = 2): Promise<NeighborhoodResult> {
@@ -91,11 +94,14 @@ export class Neo4jService {
 
       for (const node of nodes) {
         const id = String(node.properties.id ?? node.properties.name ?? '');
+        const nodeLabel = node.labels[0] ?? 'Unknown';
         if (!nodesMap.has(id)) {
           nodesMap.set(id, {
             data: {
               id,
-              label: node.labels[0] ?? 'Unknown',
+              label: nodeLabel,
+              type: nodeLabel,
+              name: String(node.properties.name ?? node.properties.login ?? id.split('/').pop() ?? id),
               ...node.properties,
             },
           });
@@ -113,6 +119,47 @@ export class Neo4jService {
         });
       }
     }
+
+    return { nodes: Array.from(nodesMap.values()), edges };
+  }
+
+  async getOverview(limit: number = 100): Promise<NeighborhoodResult> {
+    const nodeRecords = await this.runQuery(
+      'MATCH (n) RETURN n, labels(n) AS labels LIMIT $limit',
+      { limit: neo4j.int(limit) },
+    );
+    const edgeRecords = await this.runQuery(
+      'MATCH (a)-[r]->(b) RETURN a.id AS source, b.id AS target, type(r) AS type, properties(r) AS props LIMIT $limit',
+      { limit: neo4j.int(limit * 2) },
+    );
+
+    const nodesMap = new Map<string, CytoscapeNode>();
+    for (const record of nodeRecords) {
+      const node = record.get('n') as { properties: Record<string, unknown> };
+      const labels = record.get('labels') as string[];
+      const id = String(node.properties.id ?? node.properties.name ?? '');
+      const nodeLabel = labels[0] ?? 'Unknown';
+      if (!nodesMap.has(id)) {
+        nodesMap.set(id, {
+          data: {
+            id,
+            label: nodeLabel,
+            type: nodeLabel,
+            name: String(node.properties.name ?? node.properties.login ?? id.split('/').pop() ?? id),
+            ...node.properties,
+          },
+        });
+      }
+    }
+
+    const edges: CytoscapeEdge[] = edgeRecords.map((record) => ({
+      data: {
+        source: String(record.get('source')),
+        target: String(record.get('target')),
+        type: String(record.get('type')),
+        ...(record.get('props') as Record<string, unknown>),
+      },
+    }));
 
     return { nodes: Array.from(nodesMap.values()), edges };
   }

@@ -7,10 +7,13 @@ function createMockNeo4jService(): Neo4jService {
   return {
     runQuery: vi.fn().mockResolvedValue([]),
     getGraphStats: vi.fn().mockResolvedValue({
-      totalNodes: 42,
-      totalEdges: 100,
-      nodeCountsByLabel: { LogicalService: 10, Repository: 20, Team: 12 },
+      nodeCount: 42,
+      edgeCount: 100,
+      nodesByLabel: { LogicalService: 10, Repository: 20, Team: 12 },
       edgeCountsByType: { OWNS: 30, IMPLEMENTED_BY: 40, DEPENDS_ON: 30 },
+      staleness: 0,
+      lastSync: '2026-04-19T00:00:00.000Z',
+      healthScore: 100,
     }),
     getNeighborhood: vi.fn().mockResolvedValue({
       nodes: [
@@ -49,9 +52,9 @@ describe('Graph routes', () => {
     });
     expect(response.statusCode).toBe(200);
     const body = response.json();
-    expect(body.totalNodes).toBe(42);
-    expect(body.totalEdges).toBe(100);
-    expect(body.nodeCountsByLabel.LogicalService).toBe(10);
+    expect(body.nodeCount).toBe(42);
+    expect(body.edgeCount).toBe(100);
+    expect(body.nodesByLabel.LogicalService).toBe(10);
   });
 
   it('GET /api/graph/neighborhood/:id returns neighborhood', async () => {

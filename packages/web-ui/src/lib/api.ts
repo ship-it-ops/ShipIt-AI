@@ -91,6 +91,10 @@ export async function fetchNeighborhood(nodeId: string, depth: number = 2): Prom
   return apiFetch<GraphData>(`/api/graph/neighborhood/${encodeURIComponent(nodeId)}?depth=${depth}`);
 }
 
+export async function fetchGraphOverview(limit: number = 100): Promise<GraphData> {
+  return apiFetch<GraphData>(`/api/graph/overview?limit=${limit}`);
+}
+
 export async function triggerSync(connectorId: string): Promise<void> {
   await apiFetch(`/api/connectors/${encodeURIComponent(connectorId)}/sync`, { method: 'POST' });
 }

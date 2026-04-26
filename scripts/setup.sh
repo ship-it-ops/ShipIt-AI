@@ -22,12 +22,18 @@ else
   errors=1
 fi
 
-# pnpm
-if command -v pnpm &>/dev/null; then
-  echo "OK  pnpm $(pnpm -v)"
+# pnpm (auto-install via corepack if missing)
+if ! command -v pnpm &>/dev/null; then
+  echo "pnpm not found — enabling via corepack..."
+  if command -v corepack &>/dev/null; then
+    corepack enable
+    echo "OK  pnpm installed via corepack ($(pnpm -v))"
+  else
+    echo "ERROR: pnpm not found and corepack unavailable — install with: brew install pnpm"
+    errors=1
+  fi
 else
-  echo "ERROR: pnpm not found — install with: brew install pnpm"
-  errors=1
+  echo "OK  pnpm $(pnpm -v)"
 fi
 
 # Docker
