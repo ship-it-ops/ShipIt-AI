@@ -227,6 +227,9 @@ const connectorsGithubConfigSchema = z.object({
     privateKeyPath: '',
     webhookSecret: '',
     webhookPublicUrl: 'http://localhost:3001/api/webhooks/github',
+    idSecret: 'github-app-id',
+    webhookSecretRef: 'github-webhook-secret',
+    privateKeySecret: 'github-app-private-key',
   }),
   rateLimits: z
     .object({
@@ -243,6 +246,9 @@ const connectorsSectionSchema = z.object({
       privateKeyPath: '',
       webhookSecret: '',
       webhookPublicUrl: 'http://localhost:3001/api/webhooks/github',
+      idSecret: 'github-app-id',
+      webhookSecretRef: 'github-webhook-secret',
+      privateKeySecret: 'github-app-private-key',
     },
     rateLimits: { conditionalRequests: true, maxConcurrentSyncs: 3 },
   }),
@@ -386,6 +392,7 @@ const accessControlSchema = z.object({
             scopes: ['openid', 'email', 'profile'],
             emailClaim: 'email',
             displayName: 'OIDC',
+            clientSecretRef: 'oidc-client-secret',
           }),
           github: githubOAuthProviderSchema.default({
             enabled: false,
@@ -393,6 +400,7 @@ const accessControlSchema = z.object({
             clientSecretEnv: '',
             allowedOrgs: [],
             displayName: 'GitHub',
+            clientSecretRef: 'github-oauth-client-secret',
           }),
         })
         .default({
@@ -404,6 +412,7 @@ const accessControlSchema = z.object({
             scopes: ['openid', 'email', 'profile'],
             emailClaim: 'email',
             displayName: 'OIDC',
+            clientSecretRef: 'oidc-client-secret',
           },
           github: {
             enabled: false,
@@ -411,6 +420,7 @@ const accessControlSchema = z.object({
             clientSecretEnv: '',
             allowedOrgs: [],
             displayName: 'GitHub',
+            clientSecretRef: 'github-oauth-client-secret',
           },
         }),
       admins: z.array(z.string()).default([]),
@@ -424,6 +434,7 @@ const accessControlSchema = z.object({
         sameSite: 'lax',
         secure: true,
         signingSecretEnv: 'SHIPIT_SESSION_SECRET',
+        secretRef: 'session-secret',
       }),
     })
     .default({
@@ -437,6 +448,7 @@ const accessControlSchema = z.object({
           scopes: ['openid', 'email', 'profile'],
           emailClaim: 'email',
           displayName: 'OIDC',
+          clientSecretRef: 'oidc-client-secret',
         },
         github: {
           enabled: false,
@@ -444,6 +456,7 @@ const accessControlSchema = z.object({
           clientSecretEnv: '',
           allowedOrgs: [],
           displayName: 'GitHub',
+          clientSecretRef: 'github-oauth-client-secret',
         },
       },
       admins: [],
@@ -454,6 +467,7 @@ const accessControlSchema = z.object({
         sameSite: 'lax',
         secure: true,
         signingSecretEnv: 'SHIPIT_SESSION_SECRET',
+        secretRef: 'session-secret',
       },
     }),
   // CORS allow-list for the web-UI origin(s). When auth is disabled, the
@@ -525,67 +539,88 @@ const baseConfigSchema = z.object({
       gsmContainer: 'shipit-neo4j-aura-password',
       consume: 'env',
       env: 'NEO4J_PASSWORD',
+      writable: false,
       required: true,
     },
     'session-secret': {
       gsmContainer: 'shipit-session-secret',
       consume: 'env',
       env: 'SHIPIT_SESSION_SECRET',
+      writable: false,
+      required: false,
     },
     'github-app-private-key': {
       gsmContainer: 'shipit-github-app-private-key',
       consume: 'file',
       filePathEnv: 'GITHUB_APP_PRIVATE_KEY_PATH',
+      writable: false,
+      required: false,
     },
     'github-app-id': {
       gsmContainer: 'shipit-github-app-id',
       consume: 'env',
       env: 'GITHUB_APP_ID',
+      writable: false,
+      required: false,
     },
     'github-webhook-secret': {
       gsmContainer: 'shipit-github-webhook-secret',
       consume: 'env',
       env: 'GITHUB_WEBHOOK_SECRET',
+      writable: false,
+      required: false,
     },
     'github-oauth-client-id': {
       gsmContainer: 'shipit-github-oauth-client-id',
       consume: 'env',
       env: 'GITHUB_OAUTH_CLIENT_ID',
+      writable: false,
+      required: false,
     },
     'github-oauth-client-secret': {
       gsmContainer: 'shipit-github-oauth-client-secret',
       consume: 'env',
       env: 'GITHUB_OAUTH_CLIENT_SECRET',
+      writable: false,
+      required: false,
     },
     'oidc-client-secret': {
       gsmContainer: 'shipit-oidc-client-secret',
       consume: 'env',
       env: 'OIDC_CLIENT_SECRET',
+      writable: false,
+      required: false,
     },
     'auth-admin-emails': {
       gsmContainer: 'shipit-auth-admin-emails',
       consume: 'store-only',
       writable: true,
+      required: false,
     },
     'auth-allow-list-emails': {
       gsmContainer: 'shipit-auth-allow-list-emails',
       consume: 'store-only',
       writable: true,
+      required: false,
     },
     'github-feedback-token': {
       gsmContainer: 'shipit-github-feedback-token',
       consume: 'env',
       env: 'FEEDBACK_GITHUB_TOKEN',
+      writable: false,
+      required: false,
     },
     'setup-completed': {
       gsmContainer: 'shipit-setup-completed',
       consume: 'store-only',
       writable: true,
+      required: false,
     },
     'connector-apps': {
       gsmContainer: 'shipit-connector-apps',
       consume: 'store-only',
       writable: true,
+      required: false,
     },
   }),
   backend: z.object({
@@ -645,6 +680,9 @@ const baseConfigSchema = z.object({
         privateKeyPath: '',
         webhookSecret: '',
         webhookPublicUrl: 'http://localhost:3001/api/webhooks/github',
+        idSecret: 'github-app-id',
+        webhookSecretRef: 'github-webhook-secret',
+        privateKeySecret: 'github-app-private-key',
       },
       rateLimits: { conditionalRequests: true, maxConcurrentSyncs: 3 },
     },
@@ -665,6 +703,7 @@ const baseConfigSchema = z.object({
           scopes: ['openid', 'email', 'profile'],
           emailClaim: 'email',
           displayName: 'OIDC',
+          clientSecretRef: 'oidc-client-secret',
         },
         github: {
           enabled: false,
@@ -672,6 +711,7 @@ const baseConfigSchema = z.object({
           clientSecretEnv: '',
           allowedOrgs: [],
           displayName: 'GitHub',
+          clientSecretRef: 'github-oauth-client-secret',
         },
       },
       admins: [],
@@ -682,6 +722,7 @@ const baseConfigSchema = z.object({
         sameSite: 'lax',
         secure: true,
         signingSecretEnv: 'SHIPIT_SESSION_SECRET',
+        secretRef: 'session-secret',
       },
     },
     web: {
@@ -698,6 +739,7 @@ const baseConfigSchema = z.object({
     enabled: true,
     repo: { owner: '', name: '' },
     defaultLabels: ['user-report'],
+    tokenSecret: 'github-feedback-token',
   }),
 });
 
