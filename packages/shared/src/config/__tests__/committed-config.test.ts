@@ -17,5 +17,12 @@ describe('committed shipit.config.yaml', () => {
     expect(Object.keys(cfg.secrets).length).toBe(13);
     expect(cfg.feedback.tokenSecret).toBe('github-feedback-token');
     expect(cfg.secrets['session-secret'].required).toBe(true);
+    expect(cfg.secrets['auth-admin-emails'].consume).toBe('env');
+    expect(cfg.secrets['auth-admin-emails'].env).toBe('SHIPIT_AUTH_ADMINS');
+    expect(cfg.secrets['auth-allow-list-emails'].env).toBe('SHIPIT_AUTH_ALLOWLIST');
+    expect(cfg.secrets['github-app-id'].writable).toBe(true);
+    expect(cfg.secrets['oidc-client-secret'].writable).toBe(true);
+    expect(cfg.secrets['github-feedback-token'].writable).toBe(false);
+    expect(cfg.secrets['github-app-private-key'].consume).toBe('file');
   });
 });

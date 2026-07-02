@@ -72,17 +72,25 @@ secrets:
       gsmContainer: shipit-github-app-private-key,
       consume: file,
       filePathEnv: GITHUB_APP_PRIVATE_KEY_PATH,
+      writable: true,
     }
-  github-app-id: { gsmContainer: shipit-github-app-id, env: GITHUB_APP_ID }
-  github-webhook-secret: { gsmContainer: shipit-github-webhook-secret, env: GITHUB_WEBHOOK_SECRET }
+  github-app-id: { gsmContainer: shipit-github-app-id, env: GITHUB_APP_ID, writable: true }
+  github-webhook-secret:
+    { gsmContainer: shipit-github-webhook-secret, env: GITHUB_WEBHOOK_SECRET, writable: true }
   github-oauth-client-id:
-    { gsmContainer: shipit-github-oauth-client-id, env: GITHUB_OAUTH_CLIENT_ID }
+    { gsmContainer: shipit-github-oauth-client-id, env: GITHUB_OAUTH_CLIENT_ID, writable: true }
   github-oauth-client-secret:
-    { gsmContainer: shipit-github-oauth-client-secret, env: GITHUB_OAUTH_CLIENT_SECRET }
-  oidc-client-secret: { gsmContainer: shipit-oidc-client-secret, env: OIDC_CLIENT_SECRET }
-  auth-admin-emails: { gsmContainer: shipit-auth-admin-emails, consume: store-only, writable: true }
+    {
+      gsmContainer: shipit-github-oauth-client-secret,
+      env: GITHUB_OAUTH_CLIENT_SECRET,
+      writable: true,
+    }
+  oidc-client-secret:
+    { gsmContainer: shipit-oidc-client-secret, env: OIDC_CLIENT_SECRET, writable: true }
+  auth-admin-emails:
+    { gsmContainer: shipit-auth-admin-emails, env: SHIPIT_AUTH_ADMINS, writable: true }
   auth-allow-list-emails:
-    { gsmContainer: shipit-auth-allow-list-emails, consume: store-only, writable: true }
+    { gsmContainer: shipit-auth-allow-list-emails, env: SHIPIT_AUTH_ALLOWLIST, writable: true }
   github-feedback-token: { gsmContainer: shipit-github-feedback-token, env: FEEDBACK_GITHUB_TOKEN }
   setup-completed: { gsmContainer: shipit-setup-completed, consume: store-only, writable: true }
   connector-apps: { gsmContainer: shipit-connector-apps, consume: store-only, writable: true }
