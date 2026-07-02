@@ -1,4 +1,5 @@
 export { hydrateFromStore, type HydrationResult } from './hydrate.js';
+export { ResolvedSecrets } from './resolved.js';
 export { FileSecretStore } from './file-store.js';
 export { GsmSecretStore, type GsmClientLike } from './gsm-store.js';
 export {

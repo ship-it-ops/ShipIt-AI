@@ -91,6 +91,13 @@ export const WRITABLE_SECRETS: ReadonlySet<LogicalSecret> = new Set<LogicalSecre
   'connector-apps',
 ]);
 
+export class SecretMissingError extends Error {
+  constructor(name: string) {
+    super(`Required secret "${name}" is not available.`);
+    this.name = 'SecretMissingError';
+  }
+}
+
 export class SecretWriteForbiddenError extends Error {
   constructor(name: LogicalSecret) {
     super(
