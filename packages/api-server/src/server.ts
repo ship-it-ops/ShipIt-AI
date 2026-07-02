@@ -44,6 +44,7 @@ import type { SetupService } from './services/setup-service.js';
 import type { SettingsService } from './services/settings-service.js';
 import feedbackRoutes from './routes/feedback.js';
 import type { FeedbackService } from './services/feedback-service.js';
+import type { ResolvedSecrets } from './secrets/index.js';
 
 export interface CreateServerOptions {
   logger?: boolean;
@@ -102,6 +103,11 @@ export interface CreateServerOptions {
   // dedup/enqueue steps (so Redis-less unit servers don't break). Production
   // injects a WebhookRefetchQueue (see index.ts).
   webhookRefetch?: WebhookRefetchPort;
+  // Resolved secret values from the two-phase boot (hydrateSecrets). Optional
+  // so existing createServer test call sites don't need to supply it. Task 8+
+  // will consume it to pass typed secret values directly to services that need
+  // them (FeedbackService, Neo4jService, etc.) instead of reading from process.env.
+  resolved?: ResolvedSecrets;
 }
 
 declare module 'fastify' {

@@ -16,6 +16,17 @@ import { FileSecretStore } from '../../secrets/file-store.js';
 
 const SIGNING_SECRET = 'test-signing-secret-thirty-two-chars-or-more-please';
 
+// Minimal registry that allows write('oidc-client-secret', ...) in file mode.
+const OIDC_REGISTRY = {
+  'oidc-client-secret': {
+    gsmContainer: 'shipit-oidc-client-secret',
+    consume: 'env' as const,
+    env: 'OIDC_CLIENT_SECRET',
+    writable: true,
+    required: false,
+  },
+};
+
 function buildAuthConfig(overrides: Partial<Config['accessControl']['auth']> = {}): Config {
   const base = makeTestConfig();
   return {
@@ -500,7 +511,7 @@ describe('PUT /api/auth/providers/oidc — OIDC settings endpoint', () => {
     const oidcSettingsService = new OidcSettingsService({
       localConfigPath: localPath,
       authConfig: config.accessControl.auth,
-      secretStore: new FileSecretStore(env),
+      secretStore: new FileSecretStore(env, OIDC_REGISTRY),
       env,
     });
     const srv = await createServer({ config, oidcSettingsService });
@@ -828,6 +839,7 @@ describe('/api/auth — secure session cookie behind a TLS-terminating proxy', (
         sameSite: 'lax',
         secure: true, // prod posture — forced true outside development
         signingSecretEnv: 'SHIPIT_SESSION_SECRET',
+        secretRef: 'session-secret',
       },
     });
     config.accessControl.auth.providers.oidc.enabled = false;

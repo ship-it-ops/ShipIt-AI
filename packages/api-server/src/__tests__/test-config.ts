@@ -3,7 +3,12 @@ import type { Config } from '@shipit-ai/shared';
 export function makeTestConfig(overrides: Partial<Config> = {}): Config {
   return {
     backend: {
-      neo4j: { uri: 'bolt://localhost:7687', user: 'neo4j', password: 'test' },
+      neo4j: {
+        uri: 'bolt://localhost:7687',
+        user: 'neo4j',
+        password: 'test',
+        passwordSecret: 'neo4j-aura-password',
+      },
       redis: { url: 'redis://localhost:6379' },
       api: { port: 0, trustProxy: false },
       schema: { path: '/tmp/schema.yaml' },
@@ -36,6 +41,9 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
           privateKeyPath: '',
           webhookSecret: '',
           webhookPublicUrl: 'http://localhost:3001/api/webhooks/github',
+          idSecret: 'github-app-id',
+          webhookSecretRef: 'github-webhook-secret',
+          privateKeySecret: 'github-app-private-key',
         },
         rateLimits: { conditionalRequests: true, maxConcurrentSyncs: 3 },
       },
@@ -50,6 +58,7 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
             issuerUrl: '',
             clientId: '',
             clientSecretEnv: '',
+            clientSecretRef: 'oidc-client-secret',
             scopes: ['openid', 'email', 'profile'],
             emailClaim: 'email',
             displayName: 'OIDC',
@@ -58,6 +67,7 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
             enabled: false,
             clientId: '',
             clientSecretEnv: '',
+            clientSecretRef: 'github-oauth-client-secret',
             allowedOrgs: [],
             displayName: 'GitHub',
           },
@@ -70,6 +80,7 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
           sameSite: 'lax',
           secure: true,
           signingSecretEnv: 'SHIPIT_SESSION_SECRET',
+          secretRef: 'session-secret',
         },
       },
       web: {
@@ -84,7 +95,9 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
       enabled: true,
       repo: { owner: '', name: '' },
       defaultLabels: ['user-report'],
+      tokenSecret: 'github-feedback-token',
     },
+    secrets: {},
     ...overrides,
   };
 }

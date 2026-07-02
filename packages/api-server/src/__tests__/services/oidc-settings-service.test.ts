@@ -7,6 +7,17 @@ import { OidcSettingsService } from '../../services/auth/oidc-settings-service.j
 import { FileSecretStore } from '../../secrets/file-store.js';
 import { makeTestConfig } from '../test-config.js';
 
+// Minimal registry that allows write('oidc-client-secret', ...) in file mode.
+const OIDC_REGISTRY = {
+  'oidc-client-secret': {
+    gsmContainer: 'shipit-oidc-client-secret',
+    consume: 'env' as const,
+    env: 'OIDC_CLIENT_SECRET',
+    writable: true,
+    required: false,
+  },
+};
+
 describe('OidcSettingsService', () => {
   let tmpDir: string;
   let localPath: string;
@@ -23,7 +34,7 @@ describe('OidcSettingsService', () => {
     const svc = new OidcSettingsService({
       localConfigPath: localPath,
       authConfig: config.accessControl.auth,
-      secretStore: new FileSecretStore(env),
+      secretStore: new FileSecretStore(env, OIDC_REGISTRY),
       env,
     });
 
@@ -91,7 +102,7 @@ describe('OidcSettingsService', () => {
     const svc = new OidcSettingsService({
       localConfigPath: localPath,
       authConfig: makeTestConfig().accessControl.auth,
-      secretStore: new FileSecretStore(env),
+      secretStore: new FileSecretStore(env, OIDC_REGISTRY),
       env,
     });
     await expect(

@@ -1,6 +1,10 @@
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { Redis } from 'ioredis';
-import { findConfigPaths, type GitHubConnectorConfig } from '@shipit-ai/shared';
+import {
+  findConfigPaths,
+  loadSecretsRegistry,
+  type GitHubConnectorConfig,
+} from '@shipit-ai/shared';
 import { loadConfig } from './config.js';
 import { createServer } from './server.js';
 import { Neo4jService } from './services/neo4j-service.js';
@@ -29,7 +33,7 @@ import {
   evaluateAuthBootability,
   shouldEnterSetupMode,
 } from './auth-bootability.js';
-import { hydrateFromStore, makeSecretStore } from './secrets/index.js';
+import { hydrateSecrets, makeSecretStore } from './secrets/index.js';
 
 export { createServer } from './server.js';
 export type { CreateServerOptions } from './server.js';
@@ -67,7 +71,7 @@ export { Neo4jService } from './services/neo4j-service.js';
 export type { GraphStats, NeighborhoodResult } from './services/neo4j-service.js';
 export {
   makeSecretStore,
-  hydrateFromStore,
+  hydrateSecrets,
   FileSecretStore,
   GsmSecretStore,
   SecretWriteForbiddenError,
@@ -79,8 +83,10 @@ async function main() {
   // hydration populates the env vars (GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_PATH,
   // OAuth/OIDC secrets) that the chart-seeded config's ${ENV} placeholders
   // reference. In file mode (default) this is a no-op.
-  const secretStore = makeSecretStore();
-  const hydration = await hydrateFromStore(secretStore);
+  const registry = loadSecretsRegistry();
+  const secretStore = makeSecretStore(registry);
+  const hydration = await hydrateSecrets(secretStore, registry);
+  const resolved = hydration.resolved;
   if (hydration.hydrated.length > 0) {
     console.log(
       `Hydrated ${hydration.hydrated.length} secret(s) from GSM: ${hydration.hydrated.join(', ')}` +
@@ -412,6 +418,7 @@ async function main() {
     // (the default), the session store is never registered so the absence
     // of a Redis URL stays a soft warning rather than a hard boot failure.
     redis: runStoreRedis ?? undefined,
+    resolved,
   });
 
   // Start any pre-configured connectors after the server is constructed so

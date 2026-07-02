@@ -15,6 +15,7 @@ function configWithFeedback(): Config {
     enabled: true,
     repo: { owner: 'ship-it-ops', name: 'shipit-ai' },
     defaultLabels: ['user-report'],
+    tokenSecret: 'github-feedback-token',
   };
   return config;
 }
