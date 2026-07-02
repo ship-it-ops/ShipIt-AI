@@ -143,6 +143,8 @@ export {
   configSchema,
   connectorInstanceSchema,
   resolveAppCredentials,
+  LOGICAL_SECRETS,
+  secretsRegistrySchema,
 } from './config/index.js';
 export type {
   Config,
@@ -155,4 +157,6 @@ export type {
   AppLike,
   AccessControlConfig,
   AuthConfig,
+  SecretEntry,
+  SecretsRegistry,
 } from './config/index.js';
