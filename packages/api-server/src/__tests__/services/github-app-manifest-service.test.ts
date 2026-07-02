@@ -8,6 +8,32 @@ import {
 } from '../../services/github-app-manifest-service.js';
 import { GsmSecretStore, type GsmClientLike } from '../../secrets/gsm-store.js';
 import type { GitHubAppService } from '../../services/github-app-service.js';
+import type { SecretsRegistry } from '@shipit-ai/shared';
+
+// Registry for the secrets the manifest service writes (connector secrets only).
+const MANIFEST_REG: SecretsRegistry = {
+  'github-app-private-key': {
+    gsmContainer: 'shipit-github-app-private-key',
+    consume: 'file',
+    filePathEnv: 'GITHUB_APP_PRIVATE_KEY_PATH',
+    writable: true,
+    required: false,
+  },
+  'github-app-id': {
+    gsmContainer: 'shipit-github-app-id',
+    consume: 'env',
+    env: 'GITHUB_APP_ID',
+    writable: true,
+    required: false,
+  },
+  'github-webhook-secret': {
+    gsmContainer: 'shipit-github-webhook-secret',
+    consume: 'env',
+    env: 'GITHUB_WEBHOOK_SECRET',
+    writable: true,
+    required: false,
+  },
+} as SecretsRegistry;
 
 // Realistic conversion payload from GitHub's manifest API.
 const conversionPayload = {
@@ -101,7 +127,12 @@ describe('GitHubAppManifestService — GSM persistence', () => {
   it('GSM mode persists the connector secrets and updates process.env (NOT the OAuth client)', async () => {
     setup();
     const { client, calls } = makeRecordingGsmClient();
-    const store = new GsmSecretStore({ projectId: 'proj', env: {} as NodeJS.ProcessEnv, client });
+    const store = new GsmSecretStore({
+      projectId: 'proj',
+      env: {} as NodeJS.ProcessEnv,
+      registry: MANIFEST_REG,
+      client,
+    });
 
     const svc = new GitHubAppManifestService({
       templatePath: tmplPath,
@@ -162,7 +193,12 @@ describe('GitHubAppManifestService — GSM persistence', () => {
   it("target='instance' performs zero GSM writes even with a gsm store", async () => {
     setup();
     const { client, calls } = makeRecordingGsmClient();
-    const store = new GsmSecretStore({ projectId: 'proj', env: {} as NodeJS.ProcessEnv, client });
+    const store = new GsmSecretStore({
+      projectId: 'proj',
+      env: {} as NodeJS.ProcessEnv,
+      registry: MANIFEST_REG,
+      client,
+    });
 
     const svc = new GitHubAppManifestService({
       templatePath: tmplPath,
@@ -189,7 +225,12 @@ describe('GitHubAppManifestService — GSM persistence', () => {
       accessSecretVersion: vi.fn().mockResolvedValue([{ payload: { data: null } }]),
       addSecretVersion: vi.fn().mockRejectedValue(permissionErr),
     };
-    const store = new GsmSecretStore({ projectId: 'proj', env: {} as NodeJS.ProcessEnv, client });
+    const store = new GsmSecretStore({
+      projectId: 'proj',
+      env: {} as NodeJS.ProcessEnv,
+      registry: MANIFEST_REG,
+      client,
+    });
 
     const svc = new GitHubAppManifestService({
       templatePath: tmplPath,
@@ -218,7 +259,12 @@ describe('GitHubAppManifestService — GSM persistence', () => {
     };
 
     const { client, calls } = makeRecordingGsmClient();
-    const store = new GsmSecretStore({ projectId: 'proj', env: {} as NodeJS.ProcessEnv, client });
+    const store = new GsmSecretStore({
+      projectId: 'proj',
+      env: {} as NodeJS.ProcessEnv,
+      registry: MANIFEST_REG,
+      client,
+    });
 
     const svc = new GitHubAppManifestService({
       templatePath: tmplPath,

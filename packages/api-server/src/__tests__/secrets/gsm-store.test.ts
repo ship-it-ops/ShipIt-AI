@@ -1,6 +1,46 @@
 import { describe, it, expect, vi } from 'vitest';
 import { GsmSecretStore, type GsmClientLike } from '../../secrets/gsm-store.js';
 import { SecretWriteForbiddenError } from '../../secrets/types.js';
+import type { SecretsRegistry } from '@shipit-ai/shared';
+
+// Registry fixture covering the secrets used in these tests.
+const REG: SecretsRegistry = {
+  'github-webhook-secret': {
+    gsmContainer: 'shipit-github-webhook-secret',
+    consume: 'env',
+    env: 'GITHUB_WEBHOOK_SECRET',
+    writable: true,
+    required: false,
+  },
+  'oidc-client-secret': {
+    gsmContainer: 'shipit-oidc-client-secret',
+    consume: 'env',
+    env: 'OIDC_CLIENT_SECRET',
+    writable: true,
+    required: false,
+  },
+  'github-app-private-key': {
+    gsmContainer: 'shipit-github-app-private-key',
+    consume: 'file',
+    filePathEnv: 'GITHUB_APP_PRIVATE_KEY_PATH',
+    writable: true,
+    required: false,
+  },
+  'github-app-id': {
+    gsmContainer: 'shipit-github-app-id',
+    consume: 'env',
+    env: 'GITHUB_APP_ID',
+    writable: true,
+    required: false,
+  },
+  'neo4j-aura-password': {
+    gsmContainer: 'shipit-neo4j-aura-password',
+    consume: 'env',
+    env: 'NEO4J_PASSWORD',
+    writable: false,
+    required: true,
+  },
+} as SecretsRegistry;
 
 function makeClient(overrides: Partial<GsmClientLike> = {}): GsmClientLike {
   return {
@@ -13,7 +53,12 @@ function makeClient(overrides: Partial<GsmClientLike> = {}): GsmClientLike {
 describe('GsmSecretStore', () => {
   it('reads latest version from the mapped container', async () => {
     const client = makeClient();
-    const store = new GsmSecretStore({ projectId: 'proj', env: {} as NodeJS.ProcessEnv, client });
+    const store = new GsmSecretStore({
+      projectId: 'proj',
+      env: {} as NodeJS.ProcessEnv,
+      registry: REG,
+      client,
+    });
     expect(await store.read('github-webhook-secret')).toBe('value');
     expect(client.accessSecretVersion).toHaveBeenCalledWith({
       name: 'projects/proj/secrets/shipit-github-webhook-secret/versions/latest',
@@ -25,6 +70,7 @@ describe('GsmSecretStore', () => {
     const store = new GsmSecretStore({
       projectId: 'proj',
       env: { SHIPIT_GSM_SECRET_GITHUB_WEBHOOK_SECRET: 'custom' } as NodeJS.ProcessEnv,
+      registry: REG,
       client,
     });
     await store.read('github-webhook-secret');
@@ -39,7 +85,12 @@ describe('GsmSecretStore', () => {
         .fn()
         .mockRejectedValue(Object.assign(new Error('not found'), { code: 5 })),
     });
-    const store = new GsmSecretStore({ projectId: 'proj', env: {} as NodeJS.ProcessEnv, client });
+    const store = new GsmSecretStore({
+      projectId: 'proj',
+      env: {} as NodeJS.ProcessEnv,
+      registry: REG,
+      client,
+    });
     expect(await store.read('oidc-client-secret')).toBeNull();
   });
 
@@ -50,7 +101,12 @@ describe('GsmSecretStore', () => {
     const client = makeClient({
       accessSecretVersion: vi.fn().mockResolvedValue([{ payload: { data: Buffer.alloc(0) } }]),
     });
-    const store = new GsmSecretStore({ projectId: 'proj', env: {} as NodeJS.ProcessEnv, client });
+    const store = new GsmSecretStore({
+      projectId: 'proj',
+      env: {} as NodeJS.ProcessEnv,
+      registry: REG,
+      client,
+    });
     expect(await store.read('oidc-client-secret')).toBeNull();
   });
 
@@ -60,7 +116,12 @@ describe('GsmSecretStore', () => {
         .fn()
         .mockRejectedValue(Object.assign(new Error('denied'), { code: 7 })),
     });
-    const store = new GsmSecretStore({ projectId: 'proj', env: {} as NodeJS.ProcessEnv, client });
+    const store = new GsmSecretStore({
+      projectId: 'proj',
+      env: {} as NodeJS.ProcessEnv,
+      registry: REG,
+      client,
+    });
     await expect(store.read('oidc-client-secret')).rejects.toThrow('denied');
   });
 
@@ -76,14 +137,24 @@ describe('GsmSecretStore', () => {
         .fn()
         .mockImplementation(async () => [{ payload: { data: written[0] } }]),
     });
-    const store = new GsmSecretStore({ projectId: 'proj', env: {} as NodeJS.ProcessEnv, client });
+    const store = new GsmSecretStore({
+      projectId: 'proj',
+      env: {} as NodeJS.ProcessEnv,
+      registry: REG,
+      client,
+    });
     await store.write('github-app-private-key', pem);
     expect(await store.read('github-app-private-key')).toBe(pem);
   });
 
   it('writes via addSecretVersion on the mapped container', async () => {
     const client = makeClient();
-    const store = new GsmSecretStore({ projectId: 'proj', env: {} as NodeJS.ProcessEnv, client });
+    const store = new GsmSecretStore({
+      projectId: 'proj',
+      env: {} as NodeJS.ProcessEnv,
+      registry: REG,
+      client,
+    });
     await store.write('github-app-id', '12345');
     expect(client.addSecretVersion).toHaveBeenCalledWith({
       parent: 'projects/proj/secrets/shipit-github-app-id',
@@ -91,9 +162,14 @@ describe('GsmSecretStore', () => {
     });
   });
 
-  it('refuses bootstrap-secret writes client-side', async () => {
+  it('refuses read-only-secret writes client-side', async () => {
     const client = makeClient();
-    const store = new GsmSecretStore({ projectId: 'proj', env: {} as NodeJS.ProcessEnv, client });
+    const store = new GsmSecretStore({
+      projectId: 'proj',
+      env: {} as NodeJS.ProcessEnv,
+      registry: REG,
+      client,
+    });
     await expect(store.write('neo4j-aura-password', 'x')).rejects.toThrow(
       SecretWriteForbiddenError,
     );

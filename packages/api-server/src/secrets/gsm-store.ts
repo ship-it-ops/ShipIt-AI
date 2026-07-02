@@ -7,7 +7,8 @@
 // The real SecretManagerServiceClient is constructed lazily so tests can
 // inject a mock (GsmClientLike) and so merely importing this module
 // doesn't pull grpc bootstrap cost into processes that run in file mode.
-import { assertWritable, gsmContainerFor, type LogicalSecret, type SecretStore } from './types.js';
+import type { SecretsRegistry } from '@shipit-ai/shared';
+import { assertWritable, gsmContainerFor, type SecretStore } from './types.js';
 
 // Narrow structural view of SecretManagerServiceClient — the seam tests mock.
 export interface GsmClientLike {
@@ -22,6 +23,7 @@ const GRPC_NOT_FOUND = 5;
 export interface GsmSecretStoreOptions {
   projectId: string;
   env?: NodeJS.ProcessEnv;
+  registry: SecretsRegistry;
   client?: GsmClientLike;
 }
 
@@ -29,11 +31,13 @@ export class GsmSecretStore implements SecretStore {
   readonly kind = 'gsm' as const;
   private projectId: string;
   private env: NodeJS.ProcessEnv;
+  private registry: SecretsRegistry;
   private client: GsmClientLike | null;
 
   constructor(opts: GsmSecretStoreOptions) {
     this.projectId = opts.projectId;
     this.env = opts.env ?? process.env;
+    this.registry = opts.registry;
     this.client = opts.client ?? null;
   }
 
@@ -47,11 +51,11 @@ export class GsmSecretStore implements SecretStore {
 
   // Container name for a logical secret — exposed so error messages can
   // tell the operator exactly which GSM container was involved.
-  containerFor(name: LogicalSecret): string {
-    return gsmContainerFor(name, this.env);
+  containerFor(name: string): string {
+    return gsmContainerFor(name, this.registry, this.env);
   }
 
-  async read(name: LogicalSecret): Promise<string | null> {
+  async read(name: string): Promise<string | null> {
     const client = await this.getClient();
     const container = this.containerFor(name);
     try {
@@ -73,8 +77,8 @@ export class GsmSecretStore implements SecretStore {
     }
   }
 
-  async write(name: LogicalSecret, value: string): Promise<void> {
-    assertWritable(name);
+  async write(name: string, value: string): Promise<void> {
+    assertWritable(name, this.registry);
     const client = await this.getClient();
     const container = this.containerFor(name);
     await client.addSecretVersion({
