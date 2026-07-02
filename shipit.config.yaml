@@ -24,6 +24,7 @@ backend:
     # acknowledge which DB account is being used.
     user: ${NEO4J_USER}
     password: ${NEO4J_PASSWORD}
+    passwordSecret: neo4j-aura-password
   redis:
     # Required everywhere — same rationale as neo4j.uri. Sessions + the
     # connector run store both live here when auth is on, so a missing
@@ -54,6 +55,38 @@ backend:
       hopLimit: 6
       queryTimeoutMs: 10000
 
+# ── Secrets registry ──────────────────────────────────────────────────────
+# Single source of truth for every secret's provenance. Non-secret metadata
+# only (container names + which env var carries the value); safe to commit.
+# Boot hydration reads this to pull values from GSM (prod) into process.env +
+# a typed accessor. Override a container per-env with
+# ${SHIPIT_GSM_SECRET_<NAME>:-default}. See
+# docs/superpowers/specs/2026-07-01-config-driven-secrets-registry-design.md.
+secrets:
+  neo4j-aura-password:
+    { gsmContainer: shipit-neo4j-aura-password, env: NEO4J_PASSWORD, required: true }
+  session-secret:
+    { gsmContainer: shipit-session-secret, env: SHIPIT_SESSION_SECRET, required: true }
+  github-app-private-key:
+    {
+      gsmContainer: shipit-github-app-private-key,
+      consume: file,
+      filePathEnv: GITHUB_APP_PRIVATE_KEY_PATH,
+    }
+  github-app-id: { gsmContainer: shipit-github-app-id, env: GITHUB_APP_ID }
+  github-webhook-secret: { gsmContainer: shipit-github-webhook-secret, env: GITHUB_WEBHOOK_SECRET }
+  github-oauth-client-id:
+    { gsmContainer: shipit-github-oauth-client-id, env: GITHUB_OAUTH_CLIENT_ID }
+  github-oauth-client-secret:
+    { gsmContainer: shipit-github-oauth-client-secret, env: GITHUB_OAUTH_CLIENT_SECRET }
+  oidc-client-secret: { gsmContainer: shipit-oidc-client-secret, env: OIDC_CLIENT_SECRET }
+  auth-admin-emails: { gsmContainer: shipit-auth-admin-emails, consume: store-only, writable: true }
+  auth-allow-list-emails:
+    { gsmContainer: shipit-auth-allow-list-emails, consume: store-only, writable: true }
+  github-feedback-token: { gsmContainer: shipit-github-feedback-token, env: FEEDBACK_GITHUB_TOKEN }
+  setup-completed: { gsmContainer: shipit-setup-completed, consume: store-only, writable: true }
+  connector-apps: { gsmContainer: shipit-connector-apps, consume: store-only, writable: true }
+
 # ── Connectors ────────────────────────────────────────────────────────────
 # External integrations that populate the knowledge graph. Top-level rather
 # than under backend.* because connectors aren't infra the API server hosts;
@@ -76,6 +109,9 @@ connectors:
       # Public URL GitHub posts webhooks to. Required only when you wire a
       # GitHub connector instance; leave empty otherwise.
       webhookPublicUrl: ${GITHUB_WEBHOOK_PUBLIC_URL:-}
+      idSecret: github-app-id
+      webhookSecretRef: github-webhook-secret
+      privateKeySecret: github-app-private-key
     rateLimits:
       # Opt into Octokit If-None-Match conditional requests to stretch the
       # 5k/hr per-installation budget. Disable if you're debugging fetchers.
@@ -99,6 +135,7 @@ feedback:
     name: ${SHIPIT_FEEDBACK_REPO_NAME:-shipit-ai}
   defaultLabels:
     - user-report
+  tokenSecret: github-feedback-token
 
 frontend:
   api:
@@ -166,6 +203,7 @@ accessControl:
         issuerUrl: ${OIDC_ISSUER_URL:-}
         clientId: ${OIDC_CLIENT_ID:-}
         clientSecretEnv: OIDC_CLIENT_SECRET
+        clientSecretRef: oidc-client-secret
         scopes: [openid, email, profile]
         emailClaim: email
         # Fallback ensures the YAML load succeeds when OIDC is disabled
@@ -189,6 +227,7 @@ accessControl:
         enabled: false
         clientId: ${GITHUB_OAUTH_CLIENT_ID:-}
         clientSecretEnv: GITHUB_OAUTH_CLIENT_SECRET
+        clientSecretRef: github-oauth-client-secret
         # Optional GitHub-org allow-list — empty means any authenticated
         # GitHub user can sign in (which usually isn't what you want in
         # production). Add your org name(s) here to gate sign-in by org
@@ -217,6 +256,7 @@ accessControl:
       # this env var doesn't resolve to a long-enough value. Generate
       # with: openssl rand -base64 48
       signingSecretEnv: SHIPIT_SESSION_SECRET
+      secretRef: session-secret
 
   # CORS allow-list for the web-UI origin(s). Required when auth is on —
   # the api-server only accepts credentialed cross-origin requests from
