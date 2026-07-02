@@ -7,12 +7,17 @@ import {
   redactSecrets,
   type FeedbackConfigView,
 } from '../../services/feedback-service.js';
+import { ResolvedSecrets } from '../../secrets/index.js';
 
 const REPO: FeedbackConfigView = {
   enabled: true,
   repo: { owner: 'ship-it-ops', name: 'shipit-ai' },
   defaultLabels: ['user-report'],
 };
+
+const TOKEN_SECRET = 'github-feedback-token';
+const withToken = new ResolvedSecrets(new Map([[TOKEN_SECRET, 't']]));
+const noToken = new ResolvedSecrets(new Map());
 
 function fakeOctokit(
   create = vi.fn(async (_args: Record<string, unknown>) => ({
@@ -22,10 +27,11 @@ function fakeOctokit(
   return { create, octokit: { rest: { issues: { create } } } };
 }
 
-const mkSvc = (feedback: FeedbackConfigView, env: NodeJS.ProcessEnv) =>
+const mkSvc = (feedback: FeedbackConfigView, resolved: ResolvedSecrets) =>
   new FeedbackService({
     feedback,
-    env,
+    resolved,
+    tokenSecret: TOKEN_SECRET,
     octokitForToken: async () => fakeOctokit().octokit as never,
   });
 
@@ -33,23 +39,19 @@ describe('FeedbackService.isConfigured', () => {
   it('requires enabled + repo, but NOT the token (launcher visibility)', () => {
     // The whole point: a configured deployment shows the launcher even without
     // a token — it errors on submit instead of hiding.
-    expect(mkSvc(REPO, {}).isConfigured()).toBe(true);
-    expect(mkSvc(REPO, { FEEDBACK_GITHUB_TOKEN: 't' }).isConfigured()).toBe(true);
-    expect(mkSvc({ ...REPO, enabled: false }, {}).isConfigured()).toBe(false);
-    expect(mkSvc({ ...REPO, repo: { owner: '', name: '' } }, {}).isConfigured()).toBe(false);
+    expect(mkSvc(REPO, noToken).isConfigured()).toBe(true);
+    expect(mkSvc(REPO, withToken).isConfigured()).toBe(true);
+    expect(mkSvc({ ...REPO, enabled: false }, noToken).isConfigured()).toBe(false);
+    expect(mkSvc({ ...REPO, repo: { owner: '', name: '' } }, noToken).isConfigured()).toBe(false);
   });
 });
 
 describe('FeedbackService.isEnabled', () => {
   it('requires enabled + repo + token (gates actual filing)', () => {
-    expect(mkSvc(REPO, { FEEDBACK_GITHUB_TOKEN: 't' }).isEnabled()).toBe(true);
-    expect(mkSvc(REPO, {}).isEnabled()).toBe(false); // no token
-    expect(mkSvc({ ...REPO, enabled: false }, { FEEDBACK_GITHUB_TOKEN: 't' }).isEnabled()).toBe(
-      false,
-    );
-    expect(
-      mkSvc({ ...REPO, repo: { owner: '', name: '' } }, { FEEDBACK_GITHUB_TOKEN: 't' }).isEnabled(),
-    ).toBe(false);
+    expect(mkSvc(REPO, withToken).isEnabled()).toBe(true);
+    expect(mkSvc(REPO, noToken).isEnabled()).toBe(false); // no token
+    expect(mkSvc({ ...REPO, enabled: false }, withToken).isEnabled()).toBe(false);
+    expect(mkSvc({ ...REPO, repo: { owner: '', name: '' } }, withToken).isEnabled()).toBe(false);
   });
 });
 
@@ -58,7 +60,8 @@ describe('FeedbackService.createReport', () => {
     const ok = fakeOctokit();
     const svc = new FeedbackService({
       feedback: REPO,
-      env: { FEEDBACK_GITHUB_TOKEN: 'tok' },
+      resolved: new ResolvedSecrets(new Map([[TOKEN_SECRET, 'tok']])),
+      tokenSecret: TOKEN_SECRET,
       octokitForToken: async () => ok.octokit as never,
     });
 
@@ -83,7 +86,11 @@ describe('FeedbackService.createReport', () => {
   });
 
   it('throws FeedbackDisabledError when not configured', async () => {
-    const svc = new FeedbackService({ feedback: REPO, env: {} });
+    const svc = new FeedbackService({
+      feedback: REPO,
+      resolved: new ResolvedSecrets(new Map()),
+      tokenSecret: TOKEN_SECRET,
+    });
     await expect(
       svc.createReport({
         type: 'bug',
@@ -97,7 +104,8 @@ describe('FeedbackService.createReport', () => {
   it('wraps an Octokit failure in IssueCreateError', async () => {
     const svc = new FeedbackService({
       feedback: REPO,
-      env: { FEEDBACK_GITHUB_TOKEN: 'tok' },
+      resolved: new ResolvedSecrets(new Map([[TOKEN_SECRET, 'tok']])),
+      tokenSecret: TOKEN_SECRET,
       octokitForToken: async () =>
         ({
           rest: {
@@ -125,14 +133,23 @@ describe('FeedbackService.checkRateLimit', () => {
         return 'OK';
       }),
     };
-    const svc = new FeedbackService({ feedback: REPO, env: {}, redis: redis as never });
+    const svc = new FeedbackService({
+      feedback: REPO,
+      resolved: new ResolvedSecrets(new Map()),
+      tokenSecret: TOKEN_SECRET,
+      redis: redis as never,
+    });
     expect(await svc.checkRateLimit('user-1')).toBe(true);
     expect(await svc.checkRateLimit('user-1')).toBe(false);
     expect(await svc.checkRateLimit('user-2')).toBe(true);
   });
 
   it('fails open (allows) without Redis', async () => {
-    const svc = new FeedbackService({ feedback: REPO, env: {} });
+    const svc = new FeedbackService({
+      feedback: REPO,
+      resolved: new ResolvedSecrets(new Map()),
+      tokenSecret: TOKEN_SECRET,
+    });
     expect(await svc.checkRateLimit('user-1')).toBe(true);
   });
 });

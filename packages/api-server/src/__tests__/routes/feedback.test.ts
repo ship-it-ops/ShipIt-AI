@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Config } from '@shipit-ai/shared';
 import { createServer } from '../../server.js';
 import { FeedbackService } from '../../services/feedback-service.js';
+import { ResolvedSecrets } from '../../secrets/index.js';
 import { makeTestConfig } from '../test-config.js';
 
 // Auth-disabled server → require-auth synthesizes the dev-fallback admin
@@ -32,9 +33,14 @@ async function makeHarness(
   const create =
     opts.create ??
     vi.fn(async () => ({ data: { html_url: 'https://github.com/x/issues/42', number: 42 } }));
+  const tokenValue = 'token' in opts ? opts.token : 'pat-xyz';
+  const resolved = new ResolvedSecrets(
+    tokenValue !== undefined ? new Map([['github-feedback-token', tokenValue]]) : new Map(),
+  );
   const feedbackService = new FeedbackService({
     feedback: config.feedback,
-    env: { FEEDBACK_GITHUB_TOKEN: 'token' in opts ? (opts.token as string) : 'pat-xyz' },
+    resolved,
+    tokenSecret: 'github-feedback-token',
     octokitForToken: async () => ({ rest: { issues: { create } } }) as never,
   });
   const server = await createServer({ config, feedbackService });

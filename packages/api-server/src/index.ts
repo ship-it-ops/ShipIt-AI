@@ -383,10 +383,13 @@ async function main() {
   });
 
   // Backs the in-app "Report a problem" widget. Live reference to
-  // config.feedback; files issues via the server-held FEEDBACK_GITHUB_TOKEN
-  // PAT. Reuses the run-store Redis client for per-user rate limiting.
+  // config.feedback; reads the issue-filing PAT from the resolved secrets
+  // accessor via config.feedback.tokenSecret. Reuses the run-store Redis
+  // client for per-user rate limiting.
   const feedbackService = new FeedbackService({
     feedback: config.feedback,
+    tokenSecret: config.feedback.tokenSecret,
+    resolved,
     redis: runStoreRedis,
   });
 

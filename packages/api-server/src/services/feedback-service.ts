@@ -1,16 +1,17 @@
 // Backs the in-app "Report a problem" widget (routes/feedback.ts).
 //
 // Files a GitHub issue in the configured product repo using a SERVER-HELD
-// fine-grained PAT (FEEDBACK_GITHUB_TOKEN, issues:write) — never the logged-in
-// user's identity. The login OAuth token is discarded after profile read,
-// carries only user:email scope, OIDC/dev users have none, and portal users
-// aren't repo collaborators; a service identity is the only viable filer. The
-// reporter is still attributed in the issue body from their session.
+// fine-grained PAT (issues:write) — never the logged-in user's identity.
+// The login OAuth token is discarded after profile read, carries only
+// user:email scope, OIDC/dev users have none, and portal users aren't repo
+// collaborators; a service identity is the only viable filer. The reporter
+// is still attributed in the issue body from their session.
 //
 // The PAT is never logged. Browser-sourced console logs are redacted for
 // obvious secrets before they land in the (public-repo) issue body.
 import type { Redis } from 'ioredis';
 import { authenticatePAT } from '@shipit-ai/connector-github';
+import { ResolvedSecrets } from '../secrets/index.js';
 
 // Derive the Octokit type transitively through connector-github (already a
 // dependency) so api-server needn't take a direct @octokit/rest dependency.
@@ -71,7 +72,8 @@ export interface FeedbackConfigView {
 
 export interface FeedbackServiceOptions {
   feedback: FeedbackConfigView;
-  env?: NodeJS.ProcessEnv;
+  resolved: ResolvedSecrets;
+  tokenSecret: string;
   // Per-user rate limiting; when absent (Redis-less) the limiter is a no-op.
   redis?: Redis | null;
   // Injectable for tests — defaults to a real PAT-authenticated Octokit.
@@ -106,19 +108,21 @@ const TYPE_HEADING: Record<FeedbackType, string> = {
 
 export class FeedbackService {
   private readonly feedback: FeedbackConfigView;
-  private readonly env: NodeJS.ProcessEnv;
+  private readonly resolved: ResolvedSecrets;
+  private readonly tokenSecret: string;
   private readonly redis?: Redis | null;
   private readonly octokitForToken: (token: string) => Promise<AuthedOctokit>;
 
   constructor(opts: FeedbackServiceOptions) {
     this.feedback = opts.feedback;
-    this.env = opts.env ?? process.env;
+    this.resolved = opts.resolved;
+    this.tokenSecret = opts.tokenSecret;
     this.redis = opts.redis;
     this.octokitForToken = opts.octokitForToken ?? defaultOctokitForToken;
   }
 
   private token(): string | undefined {
-    const t = this.env.FEEDBACK_GITHUB_TOKEN;
+    const t = this.resolved.get(this.tokenSecret);
     return t && t.trim() ? t.trim() : undefined;
   }
 
