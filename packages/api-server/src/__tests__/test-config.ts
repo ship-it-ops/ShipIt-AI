@@ -1,4 +1,22 @@
 import type { Config } from '@shipit-ai/shared';
+import { loadSecretsRegistry } from '@shipit-ai/shared';
+import { ResolvedSecrets } from '../secrets/index.js';
+
+// Builds a ResolvedSecrets whose live-view maps every consume:'env' registry
+// key to its corresponding env var name. Reads are live against `env`
+// (defaults to process.env) so tests that already set e.g.
+// process.env.SHIPIT_SESSION_SECRET work unchanged — just pass resolved to
+// createServer instead of relying on the direct process.env read.
+export function makeTestResolved(env: NodeJS.ProcessEnv = process.env): ResolvedSecrets {
+  const registry = loadSecretsRegistry();
+  const liveEnvByKey: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(registry)) {
+    if (entry.consume === 'env' && entry.env) {
+      liveEnvByKey[key] = entry.env;
+    }
+  }
+  return new ResolvedSecrets(new Map(), liveEnvByKey, env);
+}
 
 export function makeTestConfig(overrides: Partial<Config> = {}): Config {
   return {

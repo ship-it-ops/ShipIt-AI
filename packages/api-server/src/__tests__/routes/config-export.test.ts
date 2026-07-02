@@ -7,7 +7,7 @@ import type { Redis } from 'ioredis';
 import type { FastifyInstance } from 'fastify';
 import type { Config } from '@shipit-ai/shared';
 import { createServer } from '../../server.js';
-import { makeTestConfig } from '../test-config.js';
+import { makeTestConfig, makeTestResolved } from '../test-config.js';
 import type { OidcProvider } from '../../services/auth/oidc-provider.js';
 import type { GitHubProvider, GitHubUserInfo } from '../../services/auth/github-provider.js';
 
@@ -160,6 +160,7 @@ describe('GET /api/config/export — auth-enabled server', () => {
     server = await createServer({
       config: buildAuthConfig(),
       redis,
+      resolved: makeTestResolved(),
       oidcProvider: oidc,
       githubProvider: github,
       configPaths: {

@@ -19,7 +19,7 @@ import type { Redis } from 'ioredis';
 import type { FastifyInstance } from 'fastify';
 import type { Config } from '@shipit-ai/shared';
 import { createServer } from '../../server.js';
-import { makeTestConfig } from '../test-config.js';
+import { makeTestConfig, makeTestResolved } from '../test-config.js';
 import {
   RelationEditValidationError,
   RelationEditNotFoundError,
@@ -330,6 +330,7 @@ describe('relations routes — capability gating (auth enabled)', () => {
     server = await createServer({
       config: buildAuthConfig(),
       redis,
+      resolved: makeTestResolved(),
       oidcProvider: oidc,
       tokenService,
       neo4jService: fakeNeo4j,

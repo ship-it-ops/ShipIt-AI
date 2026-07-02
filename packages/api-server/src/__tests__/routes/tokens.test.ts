@@ -4,7 +4,7 @@ import type { Redis } from 'ioredis';
 import type { FastifyInstance } from 'fastify';
 import type { Config } from '@shipit-ai/shared';
 import { createServer } from '../../server.js';
-import { makeTestConfig } from '../test-config.js';
+import { makeTestConfig, makeTestResolved } from '../test-config.js';
 import type { OidcProvider } from '../../services/auth/oidc-provider.js';
 import type {
   AccessTokenWithPlaintext,
@@ -148,6 +148,7 @@ describe('/api/tokens', () => {
     server = await createServer({
       config: buildAuthConfig(),
       redis,
+      resolved: makeTestResolved(),
       oidcProvider: mockOidcProvider,
       tokenService: tokens,
     });
@@ -264,6 +265,7 @@ describe('require-auth Bearer token validation', () => {
     server = await createServer({
       config: buildAuthConfig(),
       redis,
+      resolved: makeTestResolved(),
       oidcProvider: mockOidcProvider,
       tokenService: tokens,
     });

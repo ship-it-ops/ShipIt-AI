@@ -4,7 +4,7 @@ import type { Redis } from 'ioredis';
 import type { FastifyInstance } from 'fastify';
 import type { AuthPrincipal, Config, RequestContext } from '@shipit-ai/shared';
 import { createServer } from '../../server.js';
-import { makeTestConfig } from '../test-config.js';
+import { makeTestConfig, makeTestResolved } from '../test-config.js';
 
 // The preHandler is exercised transitively by every route test, but those
 // tests don't assert the *shape* of `request.ctx` — they just trust it's
@@ -150,6 +150,7 @@ describe('require-auth preHandler — auth enabled', () => {
     server = await createServer({
       config: enableAuth(),
       redis,
+      resolved: makeTestResolved(),
       oidcProvider: mockOidcProvider,
     });
     withProbeRoute(server, {});
@@ -216,6 +217,7 @@ describe('require-auth preHandler — session-resolved principal', () => {
     server = await createServer({
       config: enableAuth(),
       redis,
+      resolved: makeTestResolved(),
       oidcProvider: mockOidcProvider,
     });
     withProbeRoute(server, captured);
@@ -323,9 +325,19 @@ describe('createServer — auth boot-time invariants', () => {
     ).rejects.toThrow(/at least 32 characters/);
   });
 
+  it('throws when auth.enabled is true and no resolved accessor is supplied', async () => {
+    process.env.SHIPIT_SESSION_SECRET = SIGNING_SECRET;
+    const config = enableAuth();
+    await expect(
+      createServer({ config, redis: new RedisMock() as unknown as Redis }),
+    ).rejects.toThrow(/resolved secrets are required/);
+  });
+
   it('throws when auth.enabled is true and no redis client is supplied', async () => {
     process.env.SHIPIT_SESSION_SECRET = SIGNING_SECRET;
     const config = enableAuth();
-    await expect(createServer({ config })).rejects.toThrow(/redis client is required/);
+    await expect(createServer({ config, resolved: makeTestResolved() })).rejects.toThrow(
+      /redis client is required/,
+    );
   });
 });

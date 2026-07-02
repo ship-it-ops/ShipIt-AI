@@ -13,6 +13,7 @@ import type { GitHubProvider, GitHubUserInfo } from '../../services/auth/github-
 import { GitHubAccessDeniedError } from '../../services/auth/github-provider.js';
 import { OidcSettingsService } from '../../services/auth/oidc-settings-service.js';
 import { FileSecretStore } from '../../secrets/file-store.js';
+import { makeTestResolved } from '../test-config.js';
 
 const SIGNING_SECRET = 'test-signing-secret-thirty-two-chars-or-more-please';
 
@@ -246,6 +247,7 @@ describe('/api/auth — auth enabled', () => {
     server = await createServer({
       config: buildAuthConfig(),
       redis,
+      resolved: makeTestResolved(),
       oidcProvider: oidc,
       githubProvider: github,
     });
@@ -448,6 +450,7 @@ describe('/api/auth — allow-list enforcement', () => {
     server = await createServer({
       config,
       redis,
+      resolved: makeTestResolved(),
       oidcProvider: oidc,
     });
     await server.ready();
@@ -571,6 +574,7 @@ describe('PUT /api/auth/providers/oidc — OIDC settings endpoint', () => {
     const srv = await createServer({
       config,
       redis,
+      resolved: makeTestResolved(),
       oidcProvider: oidcMock,
       githubProvider: githubMock,
       oidcSettingsService,
@@ -633,6 +637,7 @@ describe('PUT /api/auth/providers/oidc — OIDC settings endpoint', () => {
     const srv = await createServer({
       config,
       redis,
+      resolved: makeTestResolved(),
       oidcProvider: oidcMock,
       githubProvider: githubMock,
       oidcSettingsService,
@@ -694,6 +699,7 @@ describe('/api/auth — Person upsert on login', () => {
     server = await createServer({
       config: buildAuthConfig(),
       redis,
+      resolved: makeTestResolved(),
       oidcProvider: oidc,
       githubProvider: github,
       eventBus,
@@ -785,7 +791,8 @@ describe('/api/auth — single-origin ingress (path-only frontend.api.url)', () 
 
   beforeAll(async () => {
     process.env.SHIPIT_SESSION_SECRET = SIGNING_SECRET;
-    process.env.TEST_GITHUB_CLIENT_SECRET = 'gh-secret';
+    // github-oauth-client-secret in the registry maps to GITHUB_OAUTH_CLIENT_SECRET
+    process.env.GITHUB_OAUTH_CLIENT_SECRET = 'gh-secret';
     const base = buildAuthConfig();
     const config: Config = {
       ...base,
@@ -803,14 +810,18 @@ describe('/api/auth — single-origin ingress (path-only frontend.api.url)', () 
         web: { allowedOrigins: ['https://portal-demo.example.com'] },
       },
     };
-    server = await createServer({ config, redis: new RedisMock() as unknown as Redis });
+    server = await createServer({
+      config,
+      redis: new RedisMock() as unknown as Redis,
+      resolved: makeTestResolved(),
+    });
     await server.ready();
   });
 
   afterAll(async () => {
     await server.close();
     delete process.env.SHIPIT_SESSION_SECRET;
-    delete process.env.TEST_GITHUB_CLIENT_SECRET;
+    delete process.env.GITHUB_OAUTH_CLIENT_SECRET;
   });
 
   it('sends an absolute redirect_uri derived from the allowed web origin', async () => {
@@ -847,6 +858,7 @@ describe('/api/auth — secure session cookie behind a TLS-terminating proxy', (
     const server = await createServer({
       config,
       redis: new RedisMock() as unknown as Redis,
+      resolved: makeTestResolved(),
       githubProvider: buildMockGitHubProvider(),
     });
     await server.ready();
@@ -902,6 +914,7 @@ describe('/api/auth — role and allow-list match ANY verified GitHub email', ()
     const server = await createServer({
       config,
       redis: new RedisMock() as unknown as Redis,
+      resolved: makeTestResolved(),
       githubProvider: github,
     });
     await server.ready();

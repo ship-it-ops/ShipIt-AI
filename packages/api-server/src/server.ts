@@ -198,10 +198,12 @@ export async function createServer(opts: CreateServerOptions = {}): Promise<Fast
   // disabled-auth deployments, and setup mode skip the registration
   // entirely so the boot path doesn't require Redis when auth isn't in play.
   if (enforceAuth) {
+    const resolved = opts.resolved;
+    if (!resolved) throw new AuthConfigError('resolved secrets are required when auth is enabled.');
     if (!opts.redis) {
       throw new AuthConfigError('redis client is required when auth.enabled is true.');
     }
-    const sessionSecret = process.env[opts.config!.accessControl.auth.session.signingSecretEnv]!;
+    const sessionSecret = resolved.require(opts.config!.accessControl.auth.session.secretRef);
     await server.register(cookie);
     await server.register(session, {
       secret: sessionSecret,
@@ -248,9 +250,9 @@ export async function createServer(opts: CreateServerOptions = {}): Promise<Fast
       server.decorate('oidcProvider', opts.oidcProvider);
     } else if (opts.config!.accessControl.auth.providers.oidc.enabled) {
       const oidcCfg = opts.config!.accessControl.auth.providers.oidc;
-      const oidcSecret = process.env[oidcCfg.clientSecretEnv];
+      const oidcSecret = resolved.get(oidcCfg.clientSecretRef);
       if (!oidcSecret) {
-        throw new AuthConfigError(`OIDC clientSecretEnv "${oidcCfg.clientSecretEnv}" is not set.`);
+        throw new AuthConfigError(`OIDC secret "${oidcCfg.clientSecretRef}" is not available.`);
       }
       server.decorate(
         'oidcProvider',
@@ -266,9 +268,9 @@ export async function createServer(opts: CreateServerOptions = {}): Promise<Fast
       server.decorate('githubProvider', opts.githubProvider);
     } else if (opts.config!.accessControl.auth.providers.github.enabled) {
       const ghCfg = opts.config!.accessControl.auth.providers.github;
-      const ghSecret = process.env[ghCfg.clientSecretEnv];
+      const ghSecret = resolved.get(ghCfg.clientSecretRef);
       if (!ghSecret) {
-        throw new AuthConfigError(`GitHub clientSecretEnv "${ghCfg.clientSecretEnv}" is not set.`);
+        throw new AuthConfigError(`GitHub secret "${ghCfg.clientSecretRef}" is not available.`);
       }
       server.decorate(
         'githubProvider',

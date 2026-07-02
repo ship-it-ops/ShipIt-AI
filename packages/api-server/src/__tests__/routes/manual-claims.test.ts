@@ -18,7 +18,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Config, ResolvedProperty, RequestContext, AuthPrincipal } from '@shipit-ai/shared';
 import { buildCapabilitySet } from '@shipit-ai/shared';
 import { createServer } from '../../server.js';
-import { makeTestConfig } from '../test-config.js';
+import { makeTestConfig, makeTestResolved } from '../test-config.js';
 import { requireCapability } from '../../middleware/require-auth.js';
 import { manualWriteRateKey } from '../../routes/claims.js';
 import {
@@ -307,6 +307,7 @@ describe('manual claims routes — capability gating (auth enabled)', () => {
     server = await createServer({
       config: buildAuthConfig(),
       redis,
+      resolved: makeTestResolved(),
       oidcProvider: oidc,
       tokenService,
       neo4jService: fakeNeo4j,
