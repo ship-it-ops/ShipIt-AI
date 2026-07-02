@@ -134,6 +134,32 @@ function fakeFileStore(values: Record<string, string | null>): SecretStore {
   } as unknown as SecretStore;
 }
 
+describe('hydrateSecrets — pre-set env wins when GSM returns null', () => {
+  it('resolved.get returns the operator-pre-set env value even when GSM returns null', async () => {
+    // Simulates a Helm-seeded env var: GITHUB_APP_ID is already set in the
+    // container's environment but the GSM secret doesn't exist yet (first-run).
+    // After hydration the accessor must return the pre-set value, not null.
+    const env: NodeJS.ProcessEnv = { GITHUB_APP_ID: 'preset-id' };
+    const reg: SecretsRegistry = {
+      'github-app-id': {
+        gsmContainer: 'shipit-github-app-id',
+        consume: 'env',
+        env: 'GITHUB_APP_ID',
+        writable: true,
+        required: false,
+      },
+    } as unknown as SecretsRegistry;
+    const { resolved } = await hydrateSecrets(
+      fakeGsmStore({}), // GSM returns null for every key
+      reg,
+      env,
+    );
+    expect(resolved.get('github-app-id')).toBe('preset-id');
+    // The env var must be unchanged (no-clobber is a no-op when GSM is null).
+    expect(env.GITHUB_APP_ID).toBe('preset-id');
+  });
+});
+
 describe('hydrateSecrets — basic consume modes', () => {
   it('sets env + snapshot for consume:env, skips store-only', async () => {
     const env: NodeJS.ProcessEnv = {};

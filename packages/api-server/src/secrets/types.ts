@@ -60,6 +60,8 @@ export function gsmContainerFor(
 }
 
 export function assertWritable(name: string, registry: SecretsRegistry): void {
+  if (!(name in registry))
+    throw new Error(`Unknown secret "${name}" — not in the secrets registry.`);
   if (!registry[name]?.writable) throw new SecretWriteForbiddenError(name);
 }
 

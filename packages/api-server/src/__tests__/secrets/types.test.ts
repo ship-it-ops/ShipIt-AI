@@ -117,6 +117,20 @@ describe('secret taxonomy', () => {
     );
   });
 
+  it('assertWritable throws a plain Error (not SecretWriteForbiddenError) for unknown secrets', () => {
+    // A key absent from the registry is unknown, not merely read-only.
+    // The error message mirrors gsmContainerFor's wording.
+    expect(() => assertWritable('not-a-real-secret', REG)).toThrow(
+      'Unknown secret "not-a-real-secret" — not in the secrets registry.',
+    );
+    // Confirm it is NOT mis-classified as SecretWriteForbiddenError.
+    try {
+      assertWritable('not-a-real-secret', REG);
+    } catch (e) {
+      expect(e).not.toBeInstanceOf(SecretWriteForbiddenError);
+    }
+  });
+
   it('writable flag is driven by the registry (not a hard-coded set)', () => {
     // Override writability through the registry — proves the registry wins.
     const overrideReg: SecretsRegistry = {

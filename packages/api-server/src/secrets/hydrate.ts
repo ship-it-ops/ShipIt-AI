@@ -38,13 +38,17 @@ export async function hydrateSecrets(
   for (const [key, entry] of Object.entries(registry)) {
     if (entry.consume === 'env') {
       const value = await store.read(key);
-      if (value !== null) {
+      // No-clobber: empty-string env (e.g. a placeholder GITHUB_APP_ID="" from
+      // a chart ConfigMap) counts as unset and gets filled from GSM.
+      // Do NOT change this to === undefined.
+      if (value != null && entry.env && !env[entry.env]) env[entry.env] = value;
+      // Snapshot the EFFECTIVE env value so resolved.get() returns whatever the
+      // process will actually use — operator-pre-set wins over GSM, and that
+      // pre-set value must be visible through the accessor even when GSM returns null.
+      const effective = entry.env ? env[entry.env] : undefined;
+      if (effective && effective.length > 0) {
+        snapshot.set(key, effective);
         hydrated.push(key);
-        snapshot.set(key, value);
-        // Falsy check is deliberate: empty-string env (e.g. a placeholder
-        // GITHUB_APP_ID="" from the chart ConfigMap) counts as unset and gets
-        // filled from GSM. Do not "fix" this to === undefined.
-        if (entry.env && !env[entry.env]) env[entry.env] = value;
       }
     }
     // consume:store-only — do NOT touch env, do NOT snapshot.
