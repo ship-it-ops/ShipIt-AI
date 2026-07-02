@@ -95,8 +95,8 @@ connectors:
 feedback:
   enabled: true
   repo:
-    owner: ${SHIPIT_FEEDBACK_REPO_OWNER:-}
-    name: ${SHIPIT_FEEDBACK_REPO_NAME:-}
+    owner: ${SHIPIT_FEEDBACK_REPO_OWNER:-ship-it-ops}
+    name: ${SHIPIT_FEEDBACK_REPO_NAME:-shipit-ai}
   defaultLabels:
     - user-report
 

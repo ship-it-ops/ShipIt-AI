@@ -94,7 +94,7 @@ describe('POST /api/feedback', () => {
     expect(res.json().error.code).toBe('INVALID_FEEDBACK');
   });
 
-  it('returns 503 when feedback is not configured (no token)', async () => {
+  it('errors with 503 on submit when configured but the token is missing', async () => {
     await h.server.close();
     h = await makeHarness({ token: undefined });
     const res = await h.server.inject({ method: 'POST', url: '/api/feedback', payload: VALID });
@@ -115,6 +115,14 @@ describe('POST /api/feedback', () => {
   });
 
   it('GET /config reports enabled', async () => {
+    const res = await h.server.inject({ method: 'GET', url: '/api/feedback/config' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ enabled: true });
+  });
+
+  it('GET /config still reports enabled without a token (launcher visible)', async () => {
+    await h.server.close();
+    h = await makeHarness({ token: undefined });
     const res = await h.server.inject({ method: 'GET', url: '/api/feedback/config' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ enabled: true });

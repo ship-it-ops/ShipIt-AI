@@ -22,20 +22,33 @@ function fakeOctokit(
   return { create, octokit: { rest: { issues: { create } } } };
 }
 
-describe('FeedbackService.isEnabled', () => {
-  it('requires enabled + repo + token', () => {
-    const mk = (feedback: FeedbackConfigView, env: NodeJS.ProcessEnv) =>
-      new FeedbackService({
-        feedback,
-        env,
-        octokitForToken: async () => fakeOctokit().octokit as never,
-      });
+const mkSvc = (feedback: FeedbackConfigView, env: NodeJS.ProcessEnv) =>
+  new FeedbackService({
+    feedback,
+    env,
+    octokitForToken: async () => fakeOctokit().octokit as never,
+  });
 
-    expect(mk(REPO, { FEEDBACK_GITHUB_TOKEN: 't' }).isEnabled()).toBe(true);
-    expect(mk(REPO, {}).isEnabled()).toBe(false); // no token
-    expect(mk({ ...REPO, enabled: false }, { FEEDBACK_GITHUB_TOKEN: 't' }).isEnabled()).toBe(false);
+describe('FeedbackService.isConfigured', () => {
+  it('requires enabled + repo, but NOT the token (launcher visibility)', () => {
+    // The whole point: a configured deployment shows the launcher even without
+    // a token — it errors on submit instead of hiding.
+    expect(mkSvc(REPO, {}).isConfigured()).toBe(true);
+    expect(mkSvc(REPO, { FEEDBACK_GITHUB_TOKEN: 't' }).isConfigured()).toBe(true);
+    expect(mkSvc({ ...REPO, enabled: false }, {}).isConfigured()).toBe(false);
+    expect(mkSvc({ ...REPO, repo: { owner: '', name: '' } }, {}).isConfigured()).toBe(false);
+  });
+});
+
+describe('FeedbackService.isEnabled', () => {
+  it('requires enabled + repo + token (gates actual filing)', () => {
+    expect(mkSvc(REPO, { FEEDBACK_GITHUB_TOKEN: 't' }).isEnabled()).toBe(true);
+    expect(mkSvc(REPO, {}).isEnabled()).toBe(false); // no token
+    expect(mkSvc({ ...REPO, enabled: false }, { FEEDBACK_GITHUB_TOKEN: 't' }).isEnabled()).toBe(
+      false,
+    );
     expect(
-      mk({ ...REPO, repo: { owner: '', name: '' } }, { FEEDBACK_GITHUB_TOKEN: 't' }).isEnabled(),
+      mkSvc({ ...REPO, repo: { owner: '', name: '' } }, { FEEDBACK_GITHUB_TOKEN: 't' }).isEnabled(),
     ).toBe(false);
   });
 });

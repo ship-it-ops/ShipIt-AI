@@ -58,12 +58,15 @@ export async function feedbackRoutes(server: FastifyInstance): Promise<void> {
   // Lets the web-ui hide the launcher when feedback isn't configured. Any
   // signed-in user (the global require-auth gate already applies).
   server.get('/config', async (_request, reply) => {
-    return reply.send({ enabled: server.feedbackService?.isEnabled() ?? false });
+    // Launcher visibility tracks config (enabled + target repo), NOT the token —
+    // a configured-but-tokenless deployment shows the widget and errors on
+    // submit rather than hiding it entirely.
+    return reply.send({ enabled: server.feedbackService?.isConfigured() ?? false });
   });
 
   server.post('/', async (request: FastifyRequest, reply: FastifyReply) => {
     const service = server.feedbackService;
-    if (!service || !service.isEnabled()) {
+    if (!service || !service.isConfigured()) {
       return reply.status(503).send({
         error: {
           code: 'FEEDBACK_DISABLED',
@@ -71,6 +74,8 @@ export async function feedbackRoutes(server: FastifyInstance): Promise<void> {
         },
       });
     }
+    // A configured-but-tokenless deployment falls through here; createReport
+    // throws FeedbackDisabledError (handled below) so submit errors cleanly.
 
     const body = (request.body ?? {}) as Record<string, unknown>;
     const type = body.type;

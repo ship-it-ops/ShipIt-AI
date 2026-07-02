@@ -79,8 +79,8 @@ export interface FeedbackServiceOptions {
 }
 
 export class FeedbackDisabledError extends Error {
-  constructor() {
-    super('Feedback is not configured on this deployment.');
+  constructor(message = 'Feedback is not configured on this deployment.') {
+    super(message);
     this.name = 'FeedbackDisabledError';
   }
 }
@@ -122,12 +122,19 @@ export class FeedbackService {
     return t && t.trim() ? t.trim() : undefined;
   }
 
-  // Enabled only when explicitly turned on, a target repo is set, AND the
-  // issue-filing token is present.
+  // Configured for the *launcher*: explicitly turned on with a target repo.
+  // Deliberately does NOT require the token — we want the widget visible so
+  // users can try, and surface a clear error on submit if filing isn't wired
+  // up. Drives /api/feedback/config (web-ui launcher visibility).
+  isConfigured(): boolean {
+    return Boolean(this.feedback.enabled && this.feedback.repo.owner && this.feedback.repo.name);
+  }
+
+  // Ready to actually file an issue: configured AND the issue-filing token is
+  // present. Gates createReport; a configured-but-tokenless deployment shows
+  // the launcher but errors on submit.
   isEnabled(): boolean {
-    return Boolean(
-      this.feedback.enabled && this.feedback.repo.owner && this.feedback.repo.name && this.token(),
-    );
+    return this.isConfigured() && Boolean(this.token());
   }
 
   // Per-user cooldown to blunt accidental/abusive spam. Returns true when the
@@ -148,7 +155,12 @@ export class FeedbackService {
 
   async createReport(input: FeedbackInput): Promise<{ issueUrl: string; issueNumber: number }> {
     const token = this.token();
-    if (!this.isEnabled() || !token) throw new FeedbackDisabledError();
+    if (!this.isConfigured()) throw new FeedbackDisabledError();
+    if (!token) {
+      throw new FeedbackDisabledError(
+        'Feedback issue filing is not set up on this deployment (missing issue-filing token).',
+      );
+    }
 
     const octokit = await this.octokitForToken(token);
     const title = `[${TYPE_LABEL[input.type]}] ${input.title.trim()}`.slice(0, MAX_TITLE + 16);
