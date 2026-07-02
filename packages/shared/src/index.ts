@@ -138,6 +138,7 @@ export { verifyGitHubWebhookSignature } from './auth/github-webhook.js';
 // Config
 export {
   loadConfig,
+  loadSecretsRegistry,
   deepMerge,
   findConfigPaths,
   configSchema,
