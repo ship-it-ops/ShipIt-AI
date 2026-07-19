@@ -16,12 +16,36 @@ import type { SecretsRegistry } from '@shipit-ai/shared';
 import { ResolvedSecrets } from './resolved.js';
 import type { SecretStore } from './types.js';
 
-// These two keys are mutated at runtime by SettingsService / setup wizard,
-// so the accessor reads them live from env rather than the boot snapshot.
-const LIVE_ENV_KEYS: Record<string, string> = {
+// These keys are mutated at runtime by SettingsService / setup wizard
+// (write-through to env after persisting to GSM), so the accessor reads
+// them live from env rather than the boot snapshot.
+export const LIVE_ENV_KEYS: Record<string, string> = {
   'auth-admin-emails': 'SHIPIT_AUTH_ADMINS',
   'auth-allow-list-emails': 'SHIPIT_AUTH_ALLOWLIST',
+  'github-webhook-secret': 'GITHUB_WEBHOOK_SECRET',
+  // The setup wizard's setOAuthClient() writes these mid-session; status()/
+  // complete() must see them without a restart.
+  'github-oauth-client-id': 'GITHUB_OAUTH_CLIENT_ID',
+  'github-oauth-client-secret': 'GITHUB_OAUTH_CLIENT_SECRET',
+  // OidcSettingsService writes through env after persisting to GSM; its
+  // has-existing-secret check must see the write without a restart.
+  'oidc-client-secret': 'OIDC_CLIENT_SECRET',
 };
+
+// Fallback accessor for surfaces constructed without a boot-hydration
+// accessor (unit tests; services whose secret needs are all env-carried).
+// Post-hydration the env vars hold the effective values by construction,
+// so an env view is behavior-identical to the real accessor for these keys.
+// session-secret is included (env-carried, operator-set) even though it is
+// not runtime-mutable.
+const ENV_VIEW_KEYS: Record<string, string> = {
+  ...LIVE_ENV_KEYS,
+  'session-secret': 'SHIPIT_SESSION_SECRET',
+};
+
+export function envSecretsView(env: NodeJS.ProcessEnv = process.env): ResolvedSecrets {
+  return new ResolvedSecrets(new Map(), ENV_VIEW_KEYS, env);
+}
 
 export async function hydrateSecrets(
   store: SecretStore,

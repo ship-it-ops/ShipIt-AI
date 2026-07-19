@@ -1,5 +1,8 @@
 import { SecretMissingError } from './types.js';
 
+// Read-only face of the accessor — what most consumers should depend on.
+export type SecretsReader = Pick<ResolvedSecrets, 'get'>;
+
 // Values resolved at boot from the secret store, plus an optional "live view"
 // for secrets whose env var is mutated at runtime (auth-emails via the admin
 // Settings editor). Live-view keys read process.env on each call so post-boot

@@ -75,7 +75,6 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
             enabled: false,
             issuerUrl: '',
             clientId: '',
-            clientSecretEnv: '',
             clientSecretRef: 'oidc-client-secret',
             scopes: ['openid', 'email', 'profile'],
             emailClaim: 'email',
@@ -84,7 +83,6 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
           github: {
             enabled: false,
             clientId: '',
-            clientSecretEnv: '',
             clientSecretRef: 'github-oauth-client-secret',
             allowedOrgs: [],
             displayName: 'GitHub',
@@ -97,7 +95,6 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
           cookieName: 'shipit_sid',
           sameSite: 'lax',
           secure: true,
-          signingSecretEnv: 'SHIPIT_SESSION_SECRET',
           secretRef: 'session-secret',
         },
       },

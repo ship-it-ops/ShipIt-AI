@@ -30,7 +30,6 @@ function buildAuthConfig(): Config {
             enabled: true,
             issuerUrl: 'https://idp.example.com',
             clientId: 'test-client',
-            clientSecretEnv: 'TEST_OIDC_CLIENT_SECRET',
             displayName: 'Test IdP',
           },
           github: { ...base.accessControl.auth.providers.github, enabled: false },

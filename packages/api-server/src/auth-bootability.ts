@@ -15,6 +15,7 @@
 // when every missing gate is wizard-fixable — anything else keeps the
 // loud AuthConfigError.
 import type { Config } from '@shipit-ai/shared';
+import type { SecretsReader } from './secrets/resolved.js';
 
 export type BootGate = 'provider' | 'admins' | 'allowedOrigins' | 'sessionSecret';
 
@@ -39,7 +40,7 @@ export class AuthConfigError extends Error {
 // Boot-time invariants that Zod can't easily express. The messages are
 // verbatim from the original server.ts assert so existing runbooks and
 // log-based alerts keep matching.
-export function evaluateAuthBootability(config: Config, env: NodeJS.ProcessEnv): BootabilityResult {
+export function evaluateAuthBootability(config: Config, secrets: SecretsReader): BootabilityResult {
   const auth = config.accessControl.auth;
   if (!auth.enabled) return { bootable: true, missing: [], messages: [] };
 
@@ -73,12 +74,14 @@ export function evaluateAuthBootability(config: Config, env: NodeJS.ProcessEnv):
     );
   }
 
-  const secretEnv = auth.session.signingSecretEnv;
-  const secretValue = env[secretEnv];
+  // Read via the accessor (registry key from session.secretRef). The message
+  // keeps naming the env var verbatim — SHIPIT_SESSION_SECRET is the registry
+  // carrier for session-secret — so existing runbooks/log alerts still match.
+  const secretValue = secrets.get(auth.session.secretRef);
   if (!secretValue || secretValue.length < 32) {
     missing.push('sessionSecret');
     messages.push(
-      `session signing secret env var "${secretEnv}" must be set and at least 32 characters long.`,
+      `session signing secret env var "SHIPIT_SESSION_SECRET" must be set and at least 32 characters long.`,
     );
   }
 
@@ -88,8 +91,8 @@ export function evaluateAuthBootability(config: Config, env: NodeJS.ProcessEnv):
 // Throwing form — makes a misconfigured production deployment fail loud at
 // startup rather than silently accepting requests without auth, or
 // rejecting every request because a critical knob is missing.
-export function assertAuthConfigBootable(config: Config, env: NodeJS.ProcessEnv): void {
-  const result = evaluateAuthBootability(config, env);
+export function assertAuthConfigBootable(config: Config, secrets: SecretsReader): void {
+  const result = evaluateAuthBootability(config, secrets);
   if (!result.bootable) {
     throw new AuthConfigError(result.messages[0]!);
   }
@@ -154,7 +157,7 @@ export function shouldEnterSetupMode(input: SetupModeDecision): boolean {
 
 export function applyDerivedAuthConfig(
   config: Config,
-  env: NodeJS.ProcessEnv,
+  secrets: SecretsReader,
   secretStoreKind: 'file' | 'gsm',
 ): DerivedAuthConfig {
   const auth = config.accessControl.auth;
@@ -164,11 +167,15 @@ export function applyDerivedAuthConfig(
     derivedAllowList: false,
   };
 
+  // All four reads below are live-view keys, so mid-wizard writes
+  // (setOAuthClient / setAdminEmail write-through to env) are visible on
+  // the re-evaluation inside /api/setup/complete without a restart.
+  const oauthClientId = secrets.get('github-oauth-client-id');
   if (
     secretStoreKind === 'gsm' &&
     !auth.providers.github.enabled &&
-    env.GITHUB_OAUTH_CLIENT_ID &&
-    env.GITHUB_OAUTH_CLIENT_SECRET
+    oauthClientId &&
+    secrets.get('github-oauth-client-secret')
   ) {
     auth.providers.github.enabled = true;
     // The committed config substitutes clientId from
@@ -176,13 +183,15 @@ export function applyDerivedAuthConfig(
     // placeholder (and the fresh loadConfig() inside /api/setup/complete,
     // which runs after the exchange set the env vars in-process).
     if (!auth.providers.github.clientId) {
-      auth.providers.github.clientId = env.GITHUB_OAUTH_CLIENT_ID;
+      auth.providers.github.clientId = oauthClientId;
     }
     result.derivedGithubProvider = true;
   }
 
-  if (auth.admins.length === 0 && env.SHIPIT_AUTH_ADMINS) {
-    const admins = env.SHIPIT_AUTH_ADMINS.split(',')
+  const adminsCsv = secrets.get('auth-admin-emails');
+  if (auth.admins.length === 0 && adminsCsv) {
+    const admins = adminsCsv
+      .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
     if (admins.length > 0) {
@@ -195,8 +204,10 @@ export function applyDerivedAuthConfig(
   // admins — the list lives in the shipit-auth-allow-list-emails secret
   // (operator-managed via gcloud) so it can change without a deploy.
   // Empty/unset keeps allowList [] = everyone may sign in.
-  if (auth.allowList.length === 0 && env.SHIPIT_AUTH_ALLOWLIST) {
-    const allowList = env.SHIPIT_AUTH_ALLOWLIST.split(',')
+  const allowListCsv = secrets.get('auth-allow-list-emails');
+  if (auth.allowList.length === 0 && allowListCsv) {
+    const allowList = allowListCsv
+      .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
     if (allowList.length > 0) {

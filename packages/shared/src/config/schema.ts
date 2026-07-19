@@ -298,10 +298,11 @@ const devUserSchema = z
 // the api-server, not here — Zod can't easily express it) requires at
 // least one enabled provider and a non-empty `admins[]`.
 //
-// Secrets are NEVER stored here. Provider config holds the env-var *name*
-// (e.g. `clientSecretEnv: "OIDC_CLIENT_SECRET"`) and the api-server resolves
-// it at boot. Same pattern as `connectors.github.app.privateKeyPath` — paths
-// and env-var names are safe to commit; the values they point at are not.
+// Secrets are NEVER stored here. Provider config holds the *registry key*
+// (e.g. `clientSecretRef: "oidc-client-secret"`) and the api-server resolves
+// it through the boot-hydrated secrets accessor. Same pattern as
+// `connectors.github.app.privateKeyPath` — keys and paths are safe to
+// commit; the values they point at are not.
 
 // When a provider is disabled the empty-string defaults below are fine —
 // the provider never gets instantiated. When enabled, the refines below
@@ -312,7 +313,6 @@ const oidcProviderSchema = z
     enabled: z.boolean().default(false),
     issuerUrl: z.string().default(''),
     clientId: z.string().default(''),
-    clientSecretEnv: z.string().default(''),
     scopes: z.array(z.string()).default(['openid', 'email', 'profile']),
     emailClaim: z.string().default('email'),
     displayName: z.string().default('OIDC'),
@@ -327,9 +327,10 @@ const oidcProviderSchema = z
     message: 'must be set when oidc.enabled is true',
     path: ['clientId'],
   })
-  .refine((v) => !v.enabled || v.clientSecretEnv.length > 0, {
-    message: 'must be the name of an env var holding the client secret when oidc.enabled is true',
-    path: ['clientSecretEnv'],
+  .refine((v) => !v.enabled || v.clientSecretRef.length > 0, {
+    message:
+      'must name the secrets-registry key holding the client secret when oidc.enabled is true',
+    path: ['clientSecretRef'],
   })
   .refine((v) => !v.enabled || v.displayName.length > 0, {
     message: 'must be set when oidc.enabled is true (shown on the login button)',
@@ -340,7 +341,6 @@ const githubOAuthProviderSchema = z
   .object({
     enabled: z.boolean().default(false),
     clientId: z.string().default(''),
-    clientSecretEnv: z.string().default(''),
     // Optional GitHub-org allow-list. Empty array = any GitHub user with an
     // account can log in. Distinct from the connector-side `org` config —
     // this gates *web-UI sign-in*, not the data sync.
@@ -353,9 +353,10 @@ const githubOAuthProviderSchema = z
     message: 'must be set when github.enabled is true',
     path: ['clientId'],
   })
-  .refine((v) => !v.enabled || v.clientSecretEnv.length > 0, {
-    message: 'must be the name of an env var holding the client secret when github.enabled is true',
-    path: ['clientSecretEnv'],
+  .refine((v) => !v.enabled || v.clientSecretRef.length > 0, {
+    message:
+      'must name the secrets-registry key holding the client secret when github.enabled is true',
+    path: ['clientSecretRef'],
   });
 
 const sessionSchema = z.object({
@@ -369,12 +370,8 @@ const sessionSchema = z.object({
   // configurable so a self-hosted operator with TLS-terminating proxies
   // can opt back in.
   secure: z.boolean().default(true),
-  // Name of the env var holding the session signing secret. Required at
-  // boot when auth.enabled is true.
-  // @deprecated — use secretRef instead; this field will be removed in a
-  // future release once the secrets registry is fully wired.
-  signingSecretEnv: z.string().default('SHIPIT_SESSION_SECRET'),
-  // Logical secret key pointing at the session signing secret in the registry.
+  // Logical secret key pointing at the session signing secret in the
+  // registry. Required (non-empty) at boot when auth.enabled is true.
   secretRef: z.string().default('session-secret'),
 });
 
@@ -388,7 +385,6 @@ const accessControlSchema = z.object({
             enabled: false,
             issuerUrl: '',
             clientId: '',
-            clientSecretEnv: '',
             scopes: ['openid', 'email', 'profile'],
             emailClaim: 'email',
             displayName: 'OIDC',
@@ -397,7 +393,6 @@ const accessControlSchema = z.object({
           github: githubOAuthProviderSchema.default({
             enabled: false,
             clientId: '',
-            clientSecretEnv: '',
             allowedOrgs: [],
             displayName: 'GitHub',
             clientSecretRef: 'github-oauth-client-secret',
@@ -408,7 +403,6 @@ const accessControlSchema = z.object({
             enabled: false,
             issuerUrl: '',
             clientId: '',
-            clientSecretEnv: '',
             scopes: ['openid', 'email', 'profile'],
             emailClaim: 'email',
             displayName: 'OIDC',
@@ -417,7 +411,6 @@ const accessControlSchema = z.object({
           github: {
             enabled: false,
             clientId: '',
-            clientSecretEnv: '',
             allowedOrgs: [],
             displayName: 'GitHub',
             clientSecretRef: 'github-oauth-client-secret',
@@ -433,7 +426,6 @@ const accessControlSchema = z.object({
         cookieName: 'shipit_sid',
         sameSite: 'lax',
         secure: true,
-        signingSecretEnv: 'SHIPIT_SESSION_SECRET',
         secretRef: 'session-secret',
       }),
     })
@@ -444,7 +436,6 @@ const accessControlSchema = z.object({
           enabled: false,
           issuerUrl: '',
           clientId: '',
-          clientSecretEnv: '',
           scopes: ['openid', 'email', 'profile'],
           emailClaim: 'email',
           displayName: 'OIDC',
@@ -453,7 +444,6 @@ const accessControlSchema = z.object({
         github: {
           enabled: false,
           clientId: '',
-          clientSecretEnv: '',
           allowedOrgs: [],
           displayName: 'GitHub',
           clientSecretRef: 'github-oauth-client-secret',
@@ -466,7 +456,6 @@ const accessControlSchema = z.object({
         cookieName: 'shipit_sid',
         sameSite: 'lax',
         secure: true,
-        signingSecretEnv: 'SHIPIT_SESSION_SECRET',
         secretRef: 'session-secret',
       },
     }),
@@ -701,7 +690,6 @@ const baseConfigSchema = z.object({
           enabled: false,
           issuerUrl: '',
           clientId: '',
-          clientSecretEnv: '',
           scopes: ['openid', 'email', 'profile'],
           emailClaim: 'email',
           displayName: 'OIDC',
@@ -710,7 +698,6 @@ const baseConfigSchema = z.object({
         github: {
           enabled: false,
           clientId: '',
-          clientSecretEnv: '',
           allowedOrgs: [],
           displayName: 'GitHub',
           clientSecretRef: 'github-oauth-client-secret',
@@ -723,7 +710,6 @@ const baseConfigSchema = z.object({
         cookieName: 'shipit_sid',
         sameSite: 'lax',
         secure: true,
-        signingSecretEnv: 'SHIPIT_SESSION_SECRET',
         secretRef: 'session-secret',
       },
     },

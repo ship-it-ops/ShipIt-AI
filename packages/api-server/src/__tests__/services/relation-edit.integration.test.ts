@@ -555,7 +555,6 @@ describe.skipIf(!URI)('manual-RELATIONS RBAC — route → real DB (T5b, scenari
     config.accessControl.auth.providers.oidc.enabled = true;
     config.accessControl.auth.providers.oidc.issuerUrl = 'https://idp.example.com';
     config.accessControl.auth.providers.oidc.clientId = 'oidc-test-client';
-    config.accessControl.auth.providers.oidc.clientSecretEnv = 'TEST_OIDC_CLIENT_SECRET';
     config.accessControl.auth.admins = ['admin@example.com'];
     config.accessControl.auth.session.secure = false;
     process.env.SHIPIT_SESSION_SECRET = 'test-signing-secret-thirty-two-chars-or-more-please';

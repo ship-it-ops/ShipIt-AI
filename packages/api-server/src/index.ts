@@ -104,8 +104,8 @@ async function main() {
   // client present → providers.github.enabled, SHIPIT_AUTH_ADMINS →
   // admins[]). This is what lets a deployment leave setup mode without a
   // manual config edit — the committed yaml stays safe-by-default.
-  applyDerivedAuthConfig(config, process.env, secretStore.kind);
-  const boot = evaluateAuthBootability(config, process.env);
+  applyDerivedAuthConfig(config, resolved, secretStore.kind);
+  const boot = evaluateAuthBootability(config, resolved);
 
   // SETUP MODE decision — full predicate (and its security rationale)
   // lives in shouldEnterSetupMode(); see auth-bootability.ts. The
@@ -153,7 +153,7 @@ async function main() {
       keyDir: process.env.SHIPIT_GITHUB_APP_KEY_DIR,
       secretStore,
     });
-    const setupService = new SetupService({ secretStore });
+    const setupService = new SetupService({ secretStore, resolved });
 
     const server = await createServer({
       logger: true,
@@ -181,7 +181,16 @@ async function main() {
   const { neo4j, schema, api } = config.backend;
   const schemaPath = isAbsolute(schema.path) ? schema.path : resolve(configDir, schema.path);
 
-  const neo4jService = new Neo4jService(neo4j.uri, neo4j.user, neo4j.password);
+  // Password provenance: the accessor (GSM hydration / NEO4J_PASSWORD env)
+  // is the source of truth; the config value remains as the carrier for
+  // local-dev shipit.config.local.yaml literals (an explicit non-goal to
+  // change) and for the core-writer process, which consumes the ${ENV}
+  // substitution without running secret hydration.
+  const neo4jService = new Neo4jService(
+    neo4j.uri,
+    neo4j.user,
+    resolved.get(neo4j.passwordSecret) ?? neo4j.password,
+  );
   const schemaService = new SchemaService(schemaPath);
 
   // GraphEditEvent audit-retention cleanup. Bounds the otherwise-unbounded
@@ -265,16 +274,17 @@ async function main() {
   // "should-exist-but-missing". Non-fatal; the receiver still boots.
   for (const connector of connectorRegistry.list()) {
     if (connector.type !== 'github') continue;
-    const resolved = resolveWebhookSecret(
+    const wh = resolveWebhookSecret(
       connector as GitHubConnectorConfig,
       config.connectors.github.app,
+      resolved,
       process.env,
     );
-    if (resolved.appId && resolved.source === 'none') {
+    if (wh.appId && wh.source === 'none') {
       console.warn(
-        `WEBHOOK SECRET MISSING: connector "${connector.id}" resolves App id ${resolved.appId} ` +
+        `WEBHOOK SECRET MISSING: connector "${connector.id}" resolves App id ${wh.appId} ` +
           `but has no materialized per-App webhook secret and no usable global secret ` +
-          `(reason=${resolved.reason}). Its webhook deliveries will be acknowledged without ` +
+          `(reason=${wh.reason}). Its webhook deliveries will be acknowledged without ` +
           `verification/refetch until the secret is materialized.`,
       );
     }
@@ -380,6 +390,7 @@ async function main() {
     registry: connectorRegistry,
     connectorAppStore,
     webhookRefetch: webhookRefetch ?? undefined,
+    resolved,
   });
 
   // Backs the in-app "Report a problem" widget. Live reference to
@@ -406,7 +417,7 @@ async function main() {
     // Active-mode /api/setup/status (behind auth) — used by the wizard's
     // post-restart poll and for ops debugging. The mutating setup routes
     // 409 outside setup mode.
-    setupService: new SetupService({ secretStore }),
+    setupService: new SetupService({ secretStore, resolved }),
     configPaths: { basePath: configPaths.basePath, localPath },
     config,
     // Same client the scheduler publishes through; lets the login callback

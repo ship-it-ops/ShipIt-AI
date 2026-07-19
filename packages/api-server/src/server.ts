@@ -44,7 +44,7 @@ import type { SetupService } from './services/setup-service.js';
 import type { SettingsService } from './services/settings-service.js';
 import feedbackRoutes from './routes/feedback.js';
 import type { FeedbackService } from './services/feedback-service.js';
-import type { ResolvedSecrets } from './secrets/index.js';
+import { envSecretsView, type ResolvedSecrets } from './secrets/index.js';
 
 export interface CreateServerOptions {
   logger?: boolean;
@@ -121,6 +121,7 @@ declare module 'fastify' {
     feedbackService?: FeedbackService;
     eventBus?: EventBusClient;
     webhookRefetch?: WebhookRefetchPort;
+    resolved: ResolvedSecrets;
   }
 }
 
@@ -135,6 +136,11 @@ export async function createServer(opts: CreateServerOptions = {}): Promise<Fast
 
   const setupMode = opts.setupMode ?? false;
   server.decorate('setupMode', setupMode);
+  // Always decorated so routes can consume secrets without null checks.
+  // The fallback (no boot hydration ran — tests, setup mode) is a pure
+  // live-env view, which reads the same env vars hydration would have
+  // populated, so behavior is identical either way.
+  server.decorate('resolved', opts.resolved ?? envSecretsView());
   if (opts.setupService) {
     server.decorate('setupService', opts.setupService);
   }
@@ -153,7 +159,7 @@ export async function createServer(opts: CreateServerOptions = {}): Promise<Fast
     // Setup mode exists precisely because this assert would fail on a
     // fresh deployment — index.ts already evaluated the gates and decided
     // the failure is wizard-fixable.
-    if (!setupMode) assertAuthConfigBootable(opts.config, process.env);
+    if (!setupMode) assertAuthConfigBootable(opts.config, server.resolved);
   }
 
   const authEnabled = opts.config?.accessControl.auth.enabled ?? false;

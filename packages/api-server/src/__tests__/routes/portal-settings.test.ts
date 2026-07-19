@@ -145,7 +145,6 @@ describe('admin /api/settings — admin-gating (member role → 403 everywhere)'
               enabled: true,
               issuerUrl: 'https://idp.example.com',
               clientId: 'oidc-test-client',
-              clientSecretEnv: 'TEST_OIDC_CLIENT_SECRET',
               displayName: 'Example IdP',
             },
             github: { ...base.accessControl.auth.providers.github, enabled: false },

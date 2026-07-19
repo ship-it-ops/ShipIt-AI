@@ -14,7 +14,8 @@ import { randomBytes } from 'node:crypto';
 import { resolveAppCredentials, type AppLike, type GitHubConnectorConfig } from '@shipit-ai/shared';
 import type { ConnectorAppStore } from './connector-app-store.js';
 import type { ConnectorRegistry } from './connector-registry.js';
-import { resolveWebhookSecret } from './webhook-resolution.js';
+import { resolveWebhookSecret, type SecretsReader } from './webhook-resolution.js';
+import { LIVE_ENV_KEYS, ResolvedSecrets } from '../secrets/index.js';
 import type { SecretStore } from '../secrets/types.js';
 import type { WebhookRefetchPort } from '../routes/webhooks.js';
 
@@ -37,6 +38,10 @@ export interface SettingsServiceOptions {
   connectorAppStore: ConnectorAppStore;
   webhookRefetch?: WebhookRefetchPort;
   env?: NodeJS.ProcessEnv;
+  // Secrets accessor for webhook-secret resolution. Defaults to a live view
+  // over `env`, which is behavior-identical (the global webhook secret is a
+  // live-env key so admin rotation is visible without restart).
+  resolved?: SecretsReader;
 }
 
 // Thrown when a webhook-secret rotate is requested for a connector that has no
@@ -66,6 +71,7 @@ export class SettingsService {
   private readonly connectorAppStore: ConnectorAppStore;
   private readonly webhookRefetch?: WebhookRefetchPort;
   private readonly env: NodeJS.ProcessEnv;
+  private readonly resolved: SecretsReader;
 
   constructor(opts: SettingsServiceOptions) {
     this.secretStore = opts.secretStore;
@@ -74,6 +80,7 @@ export class SettingsService {
     this.connectorAppStore = opts.connectorAppStore;
     this.webhookRefetch = opts.webhookRefetch;
     this.env = opts.env ?? process.env;
+    this.resolved = opts.resolved ?? new ResolvedSecrets(new Map(), LIVE_ENV_KEYS, this.env);
   }
 
   // Generate + persist a fresh webhook secret for a connector's GitHub App and
@@ -205,7 +212,7 @@ export class SettingsService {
     for (const c of this.registry.list()) {
       if (c.type !== 'github') continue;
       const gh = c as GitHubConnectorConfig;
-      const resolved = resolveWebhookSecret(gh, this.globalApp, this.env);
+      const resolved = resolveWebhookSecret(gh, this.globalApp, this.resolved, this.env);
       const lastVerifiedDelivery = this.webhookRefetch
         ? await this.webhookRefetch.getLastVerifiedDelivery(gh.id)
         : null;

@@ -3,7 +3,7 @@
 // restarts) + the current process env; the public identifiers go to
 // shipit.config.local.yaml using the same parseDocument + atomic-rename
 // pattern as GitHubAppService. The secret NEVER lands in YAML (secretlint
-// and the schema's env-name-only convention both forbid it).
+// and the schema's registry-key-only convention both forbid it).
 //
 // Providers are constructed once at server boot (server.ts), so changes
 // here take effect on the next restart. On GKE that restart re-hydrates
@@ -12,6 +12,8 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { parseDocument } from 'yaml';
 import type { Config } from '@shipit-ai/shared';
+import { envSecretsView } from '../../secrets/index.js';
+import type { SecretsReader } from '../../secrets/resolved.js';
 import type { SecretStore } from '../../secrets/types.js';
 
 type AuthConfig = Config['accessControl']['auth'];
@@ -29,6 +31,10 @@ export interface OidcSettingsServiceOptions {
   authConfig: AuthConfig;
   secretStore: SecretStore;
   env?: NodeJS.ProcessEnv;
+  // Secrets accessor for the existing-secret check. Defaults to an env view
+  // over `env` (oidc-client-secret is a live key, so post-boot writes here
+  // are visible either way).
+  resolved?: SecretsReader;
 }
 
 export class OidcSettingsService {
@@ -36,12 +42,14 @@ export class OidcSettingsService {
   private authConfig: AuthConfig;
   private secretStore: SecretStore;
   private env: NodeJS.ProcessEnv;
+  private resolved: SecretsReader;
 
   constructor(opts: OidcSettingsServiceOptions) {
     this.localConfigPath = opts.localConfigPath;
     this.authConfig = opts.authConfig;
     this.secretStore = opts.secretStore;
     this.env = opts.env ?? process.env;
+    this.resolved = opts.resolved ?? envSecretsView(this.env);
   }
 
   async update(input: OidcSettingsInput): Promise<{ restartRequired: boolean }> {
@@ -77,7 +85,9 @@ export class OidcSettingsService {
         },
       );
     }
-    const hasExistingSecret = Boolean(this.env.OIDC_CLIENT_SECRET);
+    const hasExistingSecret = Boolean(
+      this.resolved.get(this.authConfig.providers.oidc.clientSecretRef),
+    );
     const clientSecret = input.clientSecret?.trim();
     if (!clientSecret && !hasExistingSecret) {
       throw Object.assign(
@@ -97,7 +107,7 @@ export class OidcSettingsService {
     oidc.enabled = true;
     oidc.issuerUrl = issuerUrl;
     oidc.clientId = clientId;
-    if (!oidc.clientSecretEnv) oidc.clientSecretEnv = 'OIDC_CLIENT_SECRET';
+    if (!oidc.clientSecretRef) oidc.clientSecretRef = 'oidc-client-secret';
 
     // Provider objects are built at boot; a restart picks these up (and
     // on GKE re-hydrates the secret from GSM).
@@ -111,7 +121,7 @@ export class OidcSettingsService {
     doc.setIn([...base, 'enabled'], true);
     doc.setIn([...base, 'issuerUrl'], values.issuerUrl);
     doc.setIn([...base, 'clientId'], values.clientId);
-    doc.setIn([...base, 'clientSecretEnv'], 'OIDC_CLIENT_SECRET');
+    doc.setIn([...base, 'clientSecretRef'], 'oidc-client-secret');
     const next = String(doc);
     const tmp = join(
       dirname(this.localConfigPath),

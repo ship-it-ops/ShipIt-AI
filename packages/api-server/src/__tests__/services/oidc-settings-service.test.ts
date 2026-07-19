@@ -53,7 +53,7 @@ describe('OidcSettingsService', () => {
       enabled: true,
       issuerUrl: 'https://idp.example.com',
       clientId: 'shipit-client',
-      clientSecretEnv: 'OIDC_CLIENT_SECRET',
+      clientSecretRef: 'oidc-client-secret',
     });
     // Live reference updated in place (same pattern as GitHubAppService).
     expect(config.accessControl.auth.providers.oidc.enabled).toBe(true);

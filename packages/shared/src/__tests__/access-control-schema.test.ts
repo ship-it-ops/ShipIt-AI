@@ -81,7 +81,7 @@ describe('accessControl schema', () => {
               enabled: true,
               issuerUrl: 'https://example.com',
               clientId: 'shipit',
-              clientSecretEnv: 'OIDC_CLIENT_SECRET',
+              clientSecretRef: 'oidc-client-secret',
               displayName: 'Example IdP',
             },
           },
@@ -107,7 +107,7 @@ describe('accessControl schema', () => {
             github: {
               enabled: true,
               clientId: 'gh-client',
-              clientSecretEnv: 'GITHUB_OAUTH_SECRET',
+              clientSecretRef: 'github-oauth-client-secret',
               allowedOrgs: ['ship-it-ops', 'example-org'],
             },
           },
@@ -144,7 +144,7 @@ describe('accessControl schema', () => {
       accessControl: {
         auth: {
           providers: {
-            oidc: { enabled: false, issuerUrl: '', clientId: '', clientSecretEnv: '' },
+            oidc: { enabled: false, issuerUrl: '', clientId: '', clientSecretRef: '' },
           },
         },
       },
@@ -165,7 +165,7 @@ describe('accessControl schema', () => {
                   enabled: true,
                   issuerUrl: '',
                   clientId: 'shipit',
-                  clientSecretEnv: 'OIDC_CLIENT_SECRET',
+                  clientSecretRef: 'oidc-client-secret',
                   displayName: 'IdP',
                 },
               },
@@ -190,7 +190,7 @@ describe('accessControl schema', () => {
                 enabled: true,
                 issuerUrl: 'https://idp.example.com',
                 clientId: '',
-                clientSecretEnv: 'OIDC_CLIENT_SECRET',
+                clientSecretRef: 'oidc-client-secret',
                 displayName: 'IdP',
               },
             },
@@ -201,7 +201,7 @@ describe('accessControl schema', () => {
     ).toThrow(/(?=[\s\S]*oidc\.enabled is true)(?=[\s\S]*clientId)/);
   });
 
-  it('rejects an enabled OIDC provider with an empty clientSecretEnv', () => {
+  it('rejects an enabled OIDC provider with an empty clientSecretRef', () => {
     expect(() =>
       configSchema.parse({
         ...baseConfig,
@@ -213,7 +213,7 @@ describe('accessControl schema', () => {
                 enabled: true,
                 issuerUrl: 'https://idp.example.com',
                 clientId: 'shipit',
-                clientSecretEnv: '',
+                clientSecretRef: '',
                 displayName: 'IdP',
               },
             },
@@ -221,7 +221,7 @@ describe('accessControl schema', () => {
           },
         },
       }),
-    ).toThrow(/(?=[\s\S]*oidc\.enabled is true)(?=[\s\S]*clientSecretEnv)/);
+    ).toThrow(/(?=[\s\S]*oidc\.enabled is true)(?=[\s\S]*clientSecretRef)/);
   });
 
   it('accepts a GitHub OAuth provider with empty values when disabled', () => {
@@ -230,7 +230,7 @@ describe('accessControl schema', () => {
       accessControl: {
         auth: {
           providers: {
-            github: { enabled: false, clientId: '', clientSecretEnv: '' },
+            github: { enabled: false, clientId: '', clientSecretRef: '' },
           },
         },
       },
@@ -246,7 +246,11 @@ describe('accessControl schema', () => {
           auth: {
             enabled: true,
             providers: {
-              github: { enabled: true, clientId: '', clientSecretEnv: 'GITHUB_OAUTH_SECRET' },
+              github: {
+                enabled: true,
+                clientId: '',
+                clientSecretRef: 'github-oauth-client-secret',
+              },
             },
             admins: ['a@example.com'],
           },
@@ -255,7 +259,7 @@ describe('accessControl schema', () => {
     ).toThrow(/(?=[\s\S]*github\.enabled is true)(?=[\s\S]*clientId)/);
   });
 
-  it('rejects an enabled GitHub OAuth provider with an empty clientSecretEnv', () => {
+  it('rejects an enabled GitHub OAuth provider with an empty clientSecretRef', () => {
     expect(() =>
       configSchema.parse({
         ...baseConfig,
@@ -263,12 +267,12 @@ describe('accessControl schema', () => {
           auth: {
             enabled: true,
             providers: {
-              github: { enabled: true, clientId: 'gh-client', clientSecretEnv: '' },
+              github: { enabled: true, clientId: 'gh-client', clientSecretRef: '' },
             },
             admins: ['a@example.com'],
           },
         },
       }),
-    ).toThrow(/(?=[\s\S]*github\.enabled is true)(?=[\s\S]*clientSecretEnv)/);
+    ).toThrow(/(?=[\s\S]*github\.enabled is true)(?=[\s\S]*clientSecretRef)/);
   });
 });

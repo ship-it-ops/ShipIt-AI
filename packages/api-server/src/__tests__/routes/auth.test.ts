@@ -43,14 +43,12 @@ function buildAuthConfig(overrides: Partial<Config['accessControl']['auth']> = {
             enabled: true,
             issuerUrl: 'https://idp.example.com',
             clientId: 'oidc-test-client',
-            clientSecretEnv: 'TEST_OIDC_CLIENT_SECRET',
             displayName: 'Example IdP',
           },
           github: {
             ...base.accessControl.auth.providers.github,
             enabled: true,
             clientId: 'gh-test-client',
-            clientSecretEnv: 'TEST_GITHUB_CLIENT_SECRET',
             displayName: 'GitHub',
           },
         },
@@ -445,7 +443,7 @@ describe('/api/auth — allow-list enforcement', () => {
     oidc = buildMockOidcProvider();
     const config = buildAuthConfig({ allowList: ['allowed@example.com'] });
     // Single-provider focus; disabling github keeps the test free of a
-    // second clientSecretEnv requirement.
+    // second client-secret requirement.
     config.accessControl.auth.providers.github.enabled = false;
     server = await createServer({
       config,
@@ -849,7 +847,6 @@ describe('/api/auth — secure session cookie behind a TLS-terminating proxy', (
         cookieName: 'shipit_sid',
         sameSite: 'lax',
         secure: true, // prod posture — forced true outside development
-        signingSecretEnv: 'SHIPIT_SESSION_SECRET',
         secretRef: 'session-secret',
       },
     });

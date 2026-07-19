@@ -272,7 +272,6 @@ function buildAuthConfig(): Config {
             enabled: true,
             issuerUrl: 'https://idp.example.com',
             clientId: 'oidc-test-client',
-            clientSecretEnv: 'TEST_OIDC_CLIENT_SECRET',
             displayName: 'Example IdP',
           },
         },

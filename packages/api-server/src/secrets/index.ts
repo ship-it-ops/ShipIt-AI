@@ -1,5 +1,5 @@
-export { hydrateSecrets } from './hydrate.js';
-export { ResolvedSecrets } from './resolved.js';
+export { hydrateSecrets, LIVE_ENV_KEYS, envSecretsView } from './hydrate.js';
+export { ResolvedSecrets, type SecretsReader } from './resolved.js';
 export { FileSecretStore } from './file-store.js';
 export { GsmSecretStore, type GsmClientLike } from './gsm-store.js';
 export {

@@ -38,7 +38,6 @@ function enableAuth(overrides: Partial<Config['accessControl']['auth']> = {}): C
             enabled: true,
             issuerUrl: 'https://example.com',
             clientId: 'test-client',
-            clientSecretEnv: 'TEST_OIDC_CLIENT_SECRET',
           },
         },
         admins: ['admin@example.com'],
