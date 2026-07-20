@@ -49,6 +49,4 @@ mechanisms; see the design doc's Problem section and
 
 ## Done when
 
-PR from branch `rework-secrets-plus-feedback` merged (check:
-`git ls-remote --exit-code --heads origin rework-secrets-plus-feedback` exits non-zero
-after merge+delete). Update this anchor to the PR number once the PR is opened.
+PR #96 merged (check: `gh pr view 96 --json state -q .state` prints `MERGED`).

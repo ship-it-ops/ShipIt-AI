@@ -30,7 +30,7 @@ import { ReconciliationService } from '../../services/reconciliation-service.js'
 import { SYSTEM_CONTEXT } from '@shipit-ai/shared';
 import RedisMock from 'ioredis-mock';
 import { createServer, type CreateServerOptions } from '../../server.js';
-import { makeTestConfig } from '../test-config.js';
+import { makeTestConfig, makeTestResolved } from '../test-config.js';
 
 const URI = process.env.NEO4J_TEST_URI;
 const USER = process.env.NEO4J_TEST_USER ?? 'neo4j';
@@ -564,7 +564,7 @@ describe.skipIf(!URI)('manual-edit RBAC — route → real DB (T5a, scenario 9)'
     config.accessControl.auth.admins = ['admin@example.com'];
     config.accessControl.auth.session.secure = false;
     process.env.SHIPIT_SESSION_SECRET = 'test-signing-secret-thirty-two-chars-or-more-please';
-    process.env.TEST_OIDC_CLIENT_SECRET = 'oidc-secret-stub';
+    process.env.OIDC_CLIENT_SECRET = 'oidc-secret-stub';
 
     // mcp-token whose scopes do NOT include graph:write.
     const tokenService = {
@@ -579,6 +579,7 @@ describe.skipIf(!URI)('manual-edit RBAC — route → real DB (T5a, scenario 9)'
       redis: new RedisMock() as never,
       tokenService,
       neo4jService: neo4j,
+      resolved: makeTestResolved(),
     });
     await server.ready();
   });
@@ -592,7 +593,7 @@ describe.skipIf(!URI)('manual-edit RBAC — route → real DB (T5a, scenario 9)'
     );
     await neo4j?.close();
     delete process.env.SHIPIT_SESSION_SECRET;
-    delete process.env.TEST_OIDC_CLIENT_SECRET;
+    delete process.env.OIDC_CLIENT_SECRET;
   });
 
   it('mcp-token lacking graph:write → 403 and NO claim/audit reaches the DB', async () => {

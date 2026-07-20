@@ -29,7 +29,7 @@ Last updated: 2026-07-17 | Total notes: 83
 
 <!-- always-read at session start -->
 
-- [config-driven-secrets-registry](status/config-driven-secrets-registry.md) | status | active | core | 2026-07-17 | secrets-registry rework branch: tasks 1–9 done, 10–12 remain
+- [config-driven-secrets-registry](status/config-driven-secrets-registry.md) | status | active | core | 2026-07-19 | secrets-registry rework: all 12 tasks built; PR #96 open
 
 ## Decisions
 
