@@ -87,7 +87,9 @@ async function main() {
   const secretStore = makeSecretStore(registry);
   const hydration = await hydrateSecrets(secretStore, registry);
   const resolved = hydration.resolved;
-  if (hydration.hydrated.length > 0) {
+  // gsm-gated: file mode also snapshots env-carried values into `hydrated`,
+  // but nothing was pulled from GSM — logging would mislead (review IN7).
+  if (secretStore.kind === 'gsm' && hydration.hydrated.length > 0) {
     console.log(
       `Hydrated ${hydration.hydrated.length} secret(s) from GSM: ${hydration.hydrated.join(', ')}` +
         (hydration.pemPath ? ` (PEM at ${hydration.pemPath})` : ''),
