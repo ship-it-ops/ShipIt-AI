@@ -175,7 +175,7 @@ const webhookRoutes: FastifyPluginAsync = async (server) => {
       const globalApp: AppLike = server.config?.connectors.github.app ?? {};
       const candidates: { connector: (typeof connectors)[number]; secret: string }[] = [];
       for (const connector of connectors) {
-        const resolved = resolveWebhookSecret(connector, globalApp, process.env);
+        const resolved = resolveWebhookSecret(connector, globalApp, server.resolved, process.env);
         if (resolved.secret) candidates.push({ connector, secret: resolved.secret });
       }
       if (candidates.length === 0) {

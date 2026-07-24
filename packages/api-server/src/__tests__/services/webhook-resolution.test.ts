@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AppLike, GitHubConnectorConfig } from '@shipit-ai/shared';
+import { LIVE_ENV_KEYS, ResolvedSecrets } from '../../secrets/index.js';
 import type { ConnectorRegistry } from '../../services/connector-registry.js';
 import {
   buildInstallationIndex,
@@ -66,11 +67,16 @@ describe('buildInstallationIndex / resolveConnectorsByInstallation', () => {
 describe('resolveWebhookSecret', () => {
   let keyDir: string;
   let env: NodeJS.ProcessEnv;
+  // Live view over the test env — the same accessor shape production wires
+  // (github-webhook-secret is a LIVE_ENV_KEY), so later env mutations in a
+  // test are visible through it.
+  let secrets: ResolvedSecrets;
   const globalApp: AppLike = { id: 'global-app', privateKeyPath: '/keys/global.pem' };
 
   beforeEach(() => {
     keyDir = mkdtempSync(join(tmpdir(), 'wh-secret-'));
     env = { SHIPIT_GITHUB_APP_KEY_DIR: keyDir } as NodeJS.ProcessEnv;
+    secrets = new ResolvedSecrets(new Map(), LIVE_ENV_KEYS, env);
   });
   afterEach(() => {
     rmSync(keyDir, { recursive: true, force: true });
@@ -83,20 +89,20 @@ describe('resolveWebhookSecret', () => {
 
   it('prefers the per-App sidecar secret (trimmed) for a global-App connector', () => {
     writeSidecar('global-app', 's3cr3t');
-    const r = resolveWebhookSecret(ghConnector(), globalApp, env);
+    const r = resolveWebhookSecret(ghConnector(), globalApp, secrets, env);
     expect(r).toEqual({ secret: 's3cr3t', source: 'per-app', appId: 'global-app' });
   });
 
   it('uses the per-App sidecar for a per-org (overridden) connector', () => {
     writeSidecar('org-app', 'orgsecret');
     const c = ghConnector({ app: { id: 'org-app', privateKeyPath: '/keys/org.pem' } });
-    const r = resolveWebhookSecret(c, globalApp, env);
+    const r = resolveWebhookSecret(c, globalApp, secrets, env);
     expect(r).toEqual({ secret: 'orgsecret', source: 'per-app', appId: 'org-app' });
   });
 
   it('falls back to GITHUB_WEBHOOK_SECRET only for a global-App connector', () => {
     env.GITHUB_WEBHOOK_SECRET = 'globalsecret';
-    const r = resolveWebhookSecret(ghConnector(), globalApp, env);
+    const r = resolveWebhookSecret(ghConnector(), globalApp, secrets, env);
     expect(r).toEqual({ secret: 'globalsecret', source: 'global', appId: 'global-app' });
   });
 
@@ -105,14 +111,14 @@ describe('resolveWebhookSecret', () => {
   it('NEVER downgrades a per-org connector to the global secret', () => {
     env.GITHUB_WEBHOOK_SECRET = 'globalsecret';
     const c = ghConnector({ app: { id: 'org-app', privateKeyPath: '/keys/org.pem' } });
-    const r = resolveWebhookSecret(c, globalApp, env);
+    const r = resolveWebhookSecret(c, globalApp, secrets, env);
     expect(r.secret).toBeNull();
     expect(r.source).toBe('none');
     expect(r.reason).toBe('per-app-missing');
   });
 
   it('returns none/global-empty when a global-App connector has neither sidecar nor env', () => {
-    const r = resolveWebhookSecret(ghConnector(), globalApp, env);
+    const r = resolveWebhookSecret(ghConnector(), globalApp, secrets, env);
     expect(r).toEqual({
       secret: null,
       source: 'none',

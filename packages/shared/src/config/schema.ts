@@ -1,5 +1,38 @@
 import { z } from 'zod';
 
+// ── Secrets registry ───────────────────────────────────────────────────────
+// The canonical list of every logical secret the platform knows about.
+// This tuple is the single source of truth: Task 3 mirrors it into
+// shipit.config.yaml, and the superRefine below enforces coverage.
+export const LOGICAL_SECRETS = [
+  'neo4j-aura-password',
+  'session-secret',
+  'github-app-private-key',
+  'github-app-id',
+  'github-webhook-secret',
+  'github-oauth-client-id',
+  'github-oauth-client-secret',
+  'oidc-client-secret',
+  'auth-admin-emails',
+  'auth-allow-list-emails',
+  'github-feedback-token',
+  'setup-completed',
+  'connector-apps',
+] as const;
+
+const secretEntrySchema = z.object({
+  gsmContainer: z.string().min(1),
+  consume: z.enum(['env', 'file', 'store-only']).default('env'),
+  env: z.string().optional(),
+  filePathEnv: z.string().optional(),
+  writable: z.boolean().default(false),
+  required: z.boolean().default(false),
+});
+
+export const secretsRegistrySchema = z.record(z.string(), secretEntrySchema);
+export type SecretEntry = z.infer<typeof secretEntrySchema>;
+export type SecretsRegistry = z.infer<typeof secretsRegistrySchema>;
+
 // Structural validation for a 5-field crontab string (minute hour dom month dow).
 // Each field is a comma-separated list of: `*`, `*/n` step, `a-b` range,
 // `a-b/n` ranged step, or a plain integer. This rejects obvious garbage before
@@ -182,6 +215,10 @@ const githubAppConfigSchema = z.object({
   privateKeyPath: z.string().default(''),
   webhookSecret: z.string().default(''),
   webhookPublicUrl: z.string().default('http://localhost:3001/api/webhooks/github'),
+  // Logical secret keys for the GitHub App credentials in the registry.
+  idSecret: z.string().default('github-app-id'),
+  webhookSecretRef: z.string().default('github-webhook-secret'),
+  privateKeySecret: z.string().default('github-app-private-key'),
 });
 
 const connectorsGithubConfigSchema = z.object({
@@ -190,6 +227,9 @@ const connectorsGithubConfigSchema = z.object({
     privateKeyPath: '',
     webhookSecret: '',
     webhookPublicUrl: 'http://localhost:3001/api/webhooks/github',
+    idSecret: 'github-app-id',
+    webhookSecretRef: 'github-webhook-secret',
+    privateKeySecret: 'github-app-private-key',
   }),
   rateLimits: z
     .object({
@@ -206,6 +246,9 @@ const connectorsSectionSchema = z.object({
       privateKeyPath: '',
       webhookSecret: '',
       webhookPublicUrl: 'http://localhost:3001/api/webhooks/github',
+      idSecret: 'github-app-id',
+      webhookSecretRef: 'github-webhook-secret',
+      privateKeySecret: 'github-app-private-key',
     },
     rateLimits: { conditionalRequests: true, maxConcurrentSyncs: 3 },
   }),
@@ -255,10 +298,11 @@ const devUserSchema = z
 // the api-server, not here — Zod can't easily express it) requires at
 // least one enabled provider and a non-empty `admins[]`.
 //
-// Secrets are NEVER stored here. Provider config holds the env-var *name*
-// (e.g. `clientSecretEnv: "OIDC_CLIENT_SECRET"`) and the api-server resolves
-// it at boot. Same pattern as `connectors.github.app.privateKeyPath` — paths
-// and env-var names are safe to commit; the values they point at are not.
+// Secrets are NEVER stored here. Provider config holds the *registry key*
+// (e.g. `clientSecretRef: "oidc-client-secret"`) and the api-server resolves
+// it through the boot-hydrated secrets accessor. Same pattern as
+// `connectors.github.app.privateKeyPath` — keys and paths are safe to
+// commit; the values they point at are not.
 
 // When a provider is disabled the empty-string defaults below are fine —
 // the provider never gets instantiated. When enabled, the refines below
@@ -269,10 +313,11 @@ const oidcProviderSchema = z
     enabled: z.boolean().default(false),
     issuerUrl: z.string().default(''),
     clientId: z.string().default(''),
-    clientSecretEnv: z.string().default(''),
     scopes: z.array(z.string()).default(['openid', 'email', 'profile']),
     emailClaim: z.string().default('email'),
     displayName: z.string().default('OIDC'),
+    // Logical secret key for the OIDC client secret in the registry.
+    clientSecretRef: z.string().default('oidc-client-secret'),
   })
   .refine((v) => !v.enabled || v.issuerUrl.length > 0, {
     message: 'must be set when oidc.enabled is true',
@@ -282,9 +327,10 @@ const oidcProviderSchema = z
     message: 'must be set when oidc.enabled is true',
     path: ['clientId'],
   })
-  .refine((v) => !v.enabled || v.clientSecretEnv.length > 0, {
-    message: 'must be the name of an env var holding the client secret when oidc.enabled is true',
-    path: ['clientSecretEnv'],
+  .refine((v) => !v.enabled || v.clientSecretRef.length > 0, {
+    message:
+      'must name the secrets-registry key holding the client secret when oidc.enabled is true',
+    path: ['clientSecretRef'],
   })
   .refine((v) => !v.enabled || v.displayName.length > 0, {
     message: 'must be set when oidc.enabled is true (shown on the login button)',
@@ -295,20 +341,22 @@ const githubOAuthProviderSchema = z
   .object({
     enabled: z.boolean().default(false),
     clientId: z.string().default(''),
-    clientSecretEnv: z.string().default(''),
     // Optional GitHub-org allow-list. Empty array = any GitHub user with an
     // account can log in. Distinct from the connector-side `org` config —
     // this gates *web-UI sign-in*, not the data sync.
     allowedOrgs: z.array(z.string()).default([]),
     displayName: z.string().default('GitHub'),
+    // Logical secret key for the GitHub OAuth client secret in the registry.
+    clientSecretRef: z.string().default('github-oauth-client-secret'),
   })
   .refine((v) => !v.enabled || v.clientId.length > 0, {
     message: 'must be set when github.enabled is true',
     path: ['clientId'],
   })
-  .refine((v) => !v.enabled || v.clientSecretEnv.length > 0, {
-    message: 'must be the name of an env var holding the client secret when github.enabled is true',
-    path: ['clientSecretEnv'],
+  .refine((v) => !v.enabled || v.clientSecretRef.length > 0, {
+    message:
+      'must name the secrets-registry key holding the client secret when github.enabled is true',
+    path: ['clientSecretRef'],
   });
 
 const sessionSchema = z.object({
@@ -322,9 +370,9 @@ const sessionSchema = z.object({
   // configurable so a self-hosted operator with TLS-terminating proxies
   // can opt back in.
   secure: z.boolean().default(true),
-  // Name of the env var holding the session signing secret. Required at
-  // boot when auth.enabled is true.
-  signingSecretEnv: z.string().default('SHIPIT_SESSION_SECRET'),
+  // Logical secret key pointing at the session signing secret in the
+  // registry. Required (non-empty) at boot when auth.enabled is true.
+  secretRef: z.string().default('session-secret'),
 });
 
 const accessControlSchema = z.object({
@@ -337,17 +385,17 @@ const accessControlSchema = z.object({
             enabled: false,
             issuerUrl: '',
             clientId: '',
-            clientSecretEnv: '',
             scopes: ['openid', 'email', 'profile'],
             emailClaim: 'email',
             displayName: 'OIDC',
+            clientSecretRef: 'oidc-client-secret',
           }),
           github: githubOAuthProviderSchema.default({
             enabled: false,
             clientId: '',
-            clientSecretEnv: '',
             allowedOrgs: [],
             displayName: 'GitHub',
+            clientSecretRef: 'github-oauth-client-secret',
           }),
         })
         .default({
@@ -355,17 +403,17 @@ const accessControlSchema = z.object({
             enabled: false,
             issuerUrl: '',
             clientId: '',
-            clientSecretEnv: '',
             scopes: ['openid', 'email', 'profile'],
             emailClaim: 'email',
             displayName: 'OIDC',
+            clientSecretRef: 'oidc-client-secret',
           },
           github: {
             enabled: false,
             clientId: '',
-            clientSecretEnv: '',
             allowedOrgs: [],
             displayName: 'GitHub',
+            clientSecretRef: 'github-oauth-client-secret',
           },
         }),
       admins: z.array(z.string()).default([]),
@@ -378,7 +426,7 @@ const accessControlSchema = z.object({
         cookieName: 'shipit_sid',
         sameSite: 'lax',
         secure: true,
-        signingSecretEnv: 'SHIPIT_SESSION_SECRET',
+        secretRef: 'session-secret',
       }),
     })
     .default({
@@ -388,17 +436,17 @@ const accessControlSchema = z.object({
           enabled: false,
           issuerUrl: '',
           clientId: '',
-          clientSecretEnv: '',
           scopes: ['openid', 'email', 'profile'],
           emailClaim: 'email',
           displayName: 'OIDC',
+          clientSecretRef: 'oidc-client-secret',
         },
         github: {
           enabled: false,
           clientId: '',
-          clientSecretEnv: '',
           allowedOrgs: [],
           displayName: 'GitHub',
+          clientSecretRef: 'github-oauth-client-secret',
         },
       },
       admins: [],
@@ -408,7 +456,7 @@ const accessControlSchema = z.object({
         cookieName: 'shipit_sid',
         sameSite: 'lax',
         secure: true,
-        signingSecretEnv: 'SHIPIT_SESSION_SECRET',
+        secretRef: 'session-secret',
       },
     }),
   // CORS allow-list for the web-UI origin(s). When auth is disabled, the
@@ -466,14 +514,113 @@ const feedbackConfigSchema = z.object({
     })
     .default({ owner: '', name: '' }),
   defaultLabels: z.array(z.string()).default(['user-report']),
+  // Logical secret key for the fine-grained PAT used to file issues.
+  tokenSecret: z.string().default('github-feedback-token'),
 });
 
-export const configSchema = z.object({
+const baseConfigSchema = z.object({
+  // Secrets registry — maps logical secret keys to their GSM container and
+  // consumption mode. Defaults include all 13 canonical entries so a config
+  // without a `secrets:` block still validates. Task 3 mirrors these values
+  // into shipit.config.yaml as the committed baseline.
+  secrets: secretsRegistrySchema.default({
+    'neo4j-aura-password': {
+      gsmContainer: 'shipit-neo4j-aura-password',
+      consume: 'env',
+      env: 'NEO4J_PASSWORD',
+      writable: false,
+      required: true,
+    },
+    'session-secret': {
+      gsmContainer: 'shipit-session-secret',
+      consume: 'env',
+      env: 'SHIPIT_SESSION_SECRET',
+      writable: false,
+      required: true,
+    },
+    'github-app-private-key': {
+      gsmContainer: 'shipit-github-app-private-key',
+      consume: 'file',
+      filePathEnv: 'GITHUB_APP_PRIVATE_KEY_PATH',
+      writable: true,
+      required: false,
+    },
+    'github-app-id': {
+      gsmContainer: 'shipit-github-app-id',
+      consume: 'env',
+      env: 'GITHUB_APP_ID',
+      writable: true,
+      required: false,
+    },
+    'github-webhook-secret': {
+      gsmContainer: 'shipit-github-webhook-secret',
+      consume: 'env',
+      env: 'GITHUB_WEBHOOK_SECRET',
+      writable: true,
+      required: false,
+    },
+    'github-oauth-client-id': {
+      gsmContainer: 'shipit-github-oauth-client-id',
+      consume: 'env',
+      env: 'GITHUB_OAUTH_CLIENT_ID',
+      writable: true,
+      required: false,
+    },
+    'github-oauth-client-secret': {
+      gsmContainer: 'shipit-github-oauth-client-secret',
+      consume: 'env',
+      env: 'GITHUB_OAUTH_CLIENT_SECRET',
+      writable: true,
+      required: false,
+    },
+    'oidc-client-secret': {
+      gsmContainer: 'shipit-oidc-client-secret',
+      consume: 'env',
+      env: 'OIDC_CLIENT_SECRET',
+      writable: true,
+      required: false,
+    },
+    'auth-admin-emails': {
+      gsmContainer: 'shipit-auth-admin-emails',
+      consume: 'env',
+      env: 'SHIPIT_AUTH_ADMINS',
+      writable: true,
+      required: false,
+    },
+    'auth-allow-list-emails': {
+      gsmContainer: 'shipit-auth-allow-list-emails',
+      consume: 'env',
+      env: 'SHIPIT_AUTH_ALLOWLIST',
+      writable: true,
+      required: false,
+    },
+    'github-feedback-token': {
+      gsmContainer: 'shipit-github-feedback-token',
+      consume: 'env',
+      env: 'FEEDBACK_GITHUB_TOKEN',
+      writable: false,
+      required: false,
+    },
+    'setup-completed': {
+      gsmContainer: 'shipit-setup-completed',
+      consume: 'store-only',
+      writable: true,
+      required: false,
+    },
+    'connector-apps': {
+      gsmContainer: 'shipit-connector-apps',
+      consume: 'store-only',
+      writable: true,
+      required: false,
+    },
+  }),
   backend: z.object({
     neo4j: z.object({
       uri: z.string(),
       user: z.string(),
       password: z.string(),
+      // Logical secret key for the Neo4j password in the registry.
+      passwordSecret: z.string().default('neo4j-aura-password'),
     }),
     redis: z.object({
       url: z.string(),
@@ -524,6 +671,9 @@ export const configSchema = z.object({
         privateKeyPath: '',
         webhookSecret: '',
         webhookPublicUrl: 'http://localhost:3001/api/webhooks/github',
+        idSecret: 'github-app-id',
+        webhookSecretRef: 'github-webhook-secret',
+        privateKeySecret: 'github-app-private-key',
       },
       rateLimits: { conditionalRequests: true, maxConcurrentSyncs: 3 },
     },
@@ -540,17 +690,17 @@ export const configSchema = z.object({
           enabled: false,
           issuerUrl: '',
           clientId: '',
-          clientSecretEnv: '',
           scopes: ['openid', 'email', 'profile'],
           emailClaim: 'email',
           displayName: 'OIDC',
+          clientSecretRef: 'oidc-client-secret',
         },
         github: {
           enabled: false,
           clientId: '',
-          clientSecretEnv: '',
           allowedOrgs: [],
           displayName: 'GitHub',
+          clientSecretRef: 'github-oauth-client-secret',
         },
       },
       admins: [],
@@ -560,7 +710,7 @@ export const configSchema = z.object({
         cookieName: 'shipit_sid',
         sameSite: 'lax',
         secure: true,
-        signingSecretEnv: 'SHIPIT_SESSION_SECRET',
+        secretRef: 'session-secret',
       },
     },
     web: {
@@ -577,7 +727,49 @@ export const configSchema = z.object({
     enabled: true,
     repo: { owner: '', name: '' },
     defaultLabels: ['user-report'],
+    tokenSecret: 'github-feedback-token',
   }),
+});
+
+// Cross-reference validation: ensure every logical secret has a registry entry
+// and every feature secret-ref points to a known key.
+export const configSchema = baseConfigSchema.superRefine((cfg, ctx) => {
+  for (const key of LOGICAL_SECRETS) {
+    if (!cfg.secrets[key]) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['secrets', key],
+        message: `missing registry entry for known secret "${key}"`,
+      });
+    }
+  }
+  const refs: Array<[string[], string | undefined]> = [
+    [['feedback', 'tokenSecret'], cfg.feedback.tokenSecret],
+    [['accessControl', 'auth', 'session', 'secretRef'], cfg.accessControl.auth.session.secretRef],
+    [['backend', 'neo4j', 'passwordSecret'], cfg.backend.neo4j.passwordSecret],
+    [['connectors', 'github', 'app', 'idSecret'], cfg.connectors.github.app.idSecret],
+    [
+      ['connectors', 'github', 'app', 'webhookSecretRef'],
+      cfg.connectors.github.app.webhookSecretRef,
+    ],
+    [
+      ['connectors', 'github', 'app', 'privateKeySecret'],
+      cfg.connectors.github.app.privateKeySecret,
+    ],
+    [
+      ['accessControl', 'auth', 'providers', 'oidc', 'clientSecretRef'],
+      cfg.accessControl.auth.providers.oidc.clientSecretRef,
+    ],
+    [
+      ['accessControl', 'auth', 'providers', 'github', 'clientSecretRef'],
+      cfg.accessControl.auth.providers.github.clientSecretRef,
+    ],
+  ];
+  for (const [path, ref] of refs) {
+    if (ref && !cfg.secrets[ref]) {
+      ctx.addIssue({ code: 'custom', path, message: `references unknown secret "${ref}"` });
+    }
+  }
 });
 
 export type Config = z.infer<typeof configSchema>;

@@ -14,7 +14,7 @@ import { SettingsService } from '../../services/settings-service.js';
 import { SetupService } from '../../services/setup-service.js';
 import type { LogicalSecret, SecretStore } from '../../secrets/types.js';
 import type { WebhookRefetchPort } from '../../routes/webhooks.js';
-import { makeTestConfig } from '../test-config.js';
+import { makeTestConfig, makeTestResolved } from '../test-config.js';
 
 const APP_ID = '12345';
 const DEV_ADMIN_EMAIL = 'dev@shipit.local'; // require-auth dev-fallback principal
@@ -145,7 +145,6 @@ describe('admin /api/settings — admin-gating (member role → 403 everywhere)'
               enabled: true,
               issuerUrl: 'https://idp.example.com',
               clientId: 'oidc-test-client',
-              clientSecretEnv: 'TEST_OIDC_CLIENT_SECRET',
               displayName: 'Example IdP',
             },
             github: { ...base.accessControl.auth.providers.github, enabled: false },
@@ -174,6 +173,7 @@ describe('admin /api/settings — admin-gating (member role → 403 everywhere)'
     server = await createServer({
       config,
       redis,
+      resolved: makeTestResolved(),
       oidcProvider: oidc as never,
       connectorRegistry: registry,
       settingsService: new SettingsService({

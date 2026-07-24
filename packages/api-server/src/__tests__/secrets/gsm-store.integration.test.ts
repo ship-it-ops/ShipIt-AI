@@ -32,6 +32,34 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
 import { GsmSecretStore } from '../../secrets/gsm-store.js';
 import type { LogicalSecret } from '../../secrets/types.js';
+import type { SecretsRegistry } from '@shipit-ai/shared';
+
+// Minimal registry for the secrets exercised in these integration tests.
+// The env-override path bypasses the container lookup, so gsmContainer
+// values here only matter for the (skipped) non-override path.
+const INT_REG: SecretsRegistry = {
+  'github-webhook-secret': {
+    gsmContainer: 'shipit-github-webhook-secret',
+    consume: 'env',
+    env: 'GITHUB_WEBHOOK_SECRET',
+    writable: true,
+    required: false,
+  },
+  'oidc-client-secret': {
+    gsmContainer: 'shipit-oidc-client-secret',
+    consume: 'env',
+    env: 'OIDC_CLIENT_SECRET',
+    writable: true,
+    required: false,
+  },
+  'github-app-private-key': {
+    gsmContainer: 'shipit-github-app-private-key',
+    consume: 'file',
+    filePathEnv: 'GITHUB_APP_PRIVATE_KEY_PATH',
+    writable: true,
+    required: false,
+  },
+} as SecretsRegistry;
 
 const PROJECT = process.env.GSM_TEST_PROJECT;
 const RUN = `shipit-itest-${process.pid}-${Math.floor(performance.now())}`;
@@ -73,6 +101,7 @@ describe.skipIf(!PROJECT)('GsmSecretStore — real GCP Secret Manager integratio
     return new GsmSecretStore({
       projectId: PROJECT!,
       env: { [overrideEnvFor(name)]: container } as NodeJS.ProcessEnv,
+      registry: INT_REG,
     });
   }
 

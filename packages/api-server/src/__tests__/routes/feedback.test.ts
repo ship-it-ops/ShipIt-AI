@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Config } from '@shipit-ai/shared';
 import { createServer } from '../../server.js';
 import { FeedbackService } from '../../services/feedback-service.js';
+import { ResolvedSecrets } from '../../secrets/index.js';
 import { makeTestConfig } from '../test-config.js';
 
 // Auth-disabled server → require-auth synthesizes the dev-fallback admin
@@ -15,6 +16,7 @@ function configWithFeedback(): Config {
     enabled: true,
     repo: { owner: 'ship-it-ops', name: 'shipit-ai' },
     defaultLabels: ['user-report'],
+    tokenSecret: 'github-feedback-token',
   };
   return config;
 }
@@ -31,9 +33,14 @@ async function makeHarness(
   const create =
     opts.create ??
     vi.fn(async () => ({ data: { html_url: 'https://github.com/x/issues/42', number: 42 } }));
+  const tokenValue = 'token' in opts ? opts.token : 'pat-xyz';
+  const resolved = new ResolvedSecrets(
+    tokenValue !== undefined ? new Map([['github-feedback-token', tokenValue]]) : new Map(),
+  );
   const feedbackService = new FeedbackService({
     feedback: config.feedback,
-    env: { FEEDBACK_GITHUB_TOKEN: 'token' in opts ? (opts.token as string) : 'pat-xyz' },
+    resolved,
+    tokenSecret: 'github-feedback-token',
     octokitForToken: async () => ({ rest: { issues: { create } } }) as never,
   });
   const server = await createServer({ config, feedbackService });
@@ -94,7 +101,7 @@ describe('POST /api/feedback', () => {
     expect(res.json().error.code).toBe('INVALID_FEEDBACK');
   });
 
-  it('returns 503 when feedback is not configured (no token)', async () => {
+  it('errors with 503 on submit when configured but the token is missing', async () => {
     await h.server.close();
     h = await makeHarness({ token: undefined });
     const res = await h.server.inject({ method: 'POST', url: '/api/feedback', payload: VALID });
@@ -115,6 +122,14 @@ describe('POST /api/feedback', () => {
   });
 
   it('GET /config reports enabled', async () => {
+    const res = await h.server.inject({ method: 'GET', url: '/api/feedback/config' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ enabled: true });
+  });
+
+  it('GET /config still reports enabled without a token (launcher visible)', async () => {
+    await h.server.close();
+    h = await makeHarness({ token: undefined });
     const res = await h.server.inject({ method: 'GET', url: '/api/feedback/config' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ enabled: true });

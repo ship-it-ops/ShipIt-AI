@@ -1,6 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { parse as parseYaml } from 'yaml';
-import { configSchema, type Config } from './schema.js';
+import {
+  configSchema,
+  type Config,
+  secretsRegistrySchema,
+  type SecretsRegistry,
+} from './schema.js';
 import { findConfigPaths } from './find-root.js';
 
 export interface LoadConfigOptions {
@@ -31,6 +36,32 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
       .map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`)
       .join('\n');
     throw new Error(`Config validation failed for ${basePath}:\n${issues}`);
+  }
+  return result.data;
+}
+
+export function loadSecretsRegistry(options: LoadConfigOptions = {}): SecretsRegistry {
+  const env = options.env ?? process.env;
+  let basePath = options.basePath;
+  let localPath = options.localPath;
+  if (!basePath) {
+    const found = findConfigPaths();
+    basePath = found.basePath;
+    if (!localPath) localPath = found.localPath;
+  }
+  const base = readYaml(basePath) as Record<string, unknown>;
+  const local =
+    localPath && existsSync(localPath)
+      ? (readYaml(localPath) as Record<string, unknown>)
+      : undefined;
+  const merged = local ? (deepMerge(base, local) as Record<string, unknown>) : base;
+  const substituted = substituteEnv(merged.secrets ?? {}, env, ['secrets']);
+  const result = secretsRegistrySchema.safeParse(substituted);
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`)
+      .join('\n');
+    throw new Error(`Secrets registry validation failed for ${basePath}:\n${issues}`);
   }
   return result.data;
 }

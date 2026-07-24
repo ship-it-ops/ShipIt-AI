@@ -138,11 +138,14 @@ export { verifyGitHubWebhookSignature } from './auth/github-webhook.js';
 // Config
 export {
   loadConfig,
+  loadSecretsRegistry,
   deepMerge,
   findConfigPaths,
   configSchema,
   connectorInstanceSchema,
   resolveAppCredentials,
+  LOGICAL_SECRETS,
+  secretsRegistrySchema,
 } from './config/index.js';
 export type {
   Config,
@@ -155,4 +158,6 @@ export type {
   AppLike,
   AccessControlConfig,
   AuthConfig,
+  SecretEntry,
+  SecretsRegistry,
 } from './config/index.js';

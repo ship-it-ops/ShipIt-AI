@@ -1,6 +1,6 @@
 # Agent Context
 
-Last updated: 2026-06-26 | Total notes: 82
+Last updated: 2026-07-17 | Total notes: 83
 
 ## Investigations
 
@@ -29,7 +29,7 @@ Last updated: 2026-06-26 | Total notes: 82
 
 <!-- always-read at session start -->
 
-_None in flight. All prior status entries shipped to main and were archived 2026-06-23 (reconciled: their original commit hashes were squashed away on PR merge, but every feature is present on main — #76/#85/#86/#87 + DS bumps)._
+- [config-driven-secrets-registry](status/config-driven-secrets-registry.md) | status | active | core | 2026-07-19 | secrets-registry rework: all 12 tasks built; PR #96 open
 
 ## Decisions
 

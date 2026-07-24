@@ -8,6 +8,8 @@ import {
   evaluateAuthBootability,
   type BootGate,
 } from '../auth-bootability.js';
+import { envSecretsView } from '../secrets/index.js';
+import type { SecretsReader } from '../secrets/resolved.js';
 import type { SecretStore } from '../secrets/types.js';
 
 export interface SetupGates {
@@ -33,12 +35,17 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export class SetupService {
   private readonly secretStore: SecretStore;
   private readonly env: NodeJS.ProcessEnv;
+  private readonly resolved: SecretsReader;
   private readonly loadFreshConfig: () => Config;
   private readonly exit: (code: number) => void;
 
   constructor(opts: {
     secretStore: SecretStore;
     env?: NodeJS.ProcessEnv;
+    // Secrets accessor for the wizard's gate reads. Defaults to an env view
+    // over `env`, which is behavior-identical: every key this service reads
+    // is env-carried, and the wizard's own writes go through env anyway.
+    resolved?: SecretsReader;
     // Injectable for tests; production re-reads the YAML so complete()
     // validates exactly what the next boot will see.
     loadFreshConfig?: () => Config;
@@ -46,19 +53,22 @@ export class SetupService {
   }) {
     this.secretStore = opts.secretStore;
     this.env = opts.env ?? process.env;
+    this.resolved = opts.resolved ?? envSecretsView(this.env);
     this.loadFreshConfig = opts.loadFreshConfig ?? (() => loadConfig());
     this.exit = opts.exit ?? ((code) => process.exit(code));
   }
 
   status(config: Config): SetupStatus {
     const auth = config.accessControl.auth;
-    const sessionSecret = this.env[auth.session.signingSecretEnv];
+    const sessionSecret = this.resolved.get(auth.session.secretRef);
     const gates: SetupGates = {
       oauthClientPresent: Boolean(
-        this.env.GITHUB_OAUTH_CLIENT_ID && this.env.GITHUB_OAUTH_CLIENT_SECRET,
+        this.resolved.get('github-oauth-client-id') &&
+        this.resolved.get('github-oauth-client-secret'),
       ),
       adminConfigured:
-        Boolean(this.env.SHIPIT_AUTH_ADMINS) || config.accessControl.auth.admins.length > 0,
+        Boolean(this.resolved.get('auth-admin-emails')) ||
+        config.accessControl.auth.admins.length > 0,
       sessionSecretPresent: Boolean(sessionSecret && sessionSecret.length >= 32),
       allowedOriginsConfigured: config.accessControl.web.allowedOrigins.length > 0,
     };
@@ -128,8 +138,8 @@ export class SetupService {
   // gates instead of throwing so the route can 409 with actionable detail.
   async complete(): Promise<SetupCompleteResult> {
     const fresh = this.loadFreshConfig();
-    applyDerivedAuthConfig(fresh, this.env, this.secretStore.kind);
-    const boot = evaluateAuthBootability(fresh, this.env);
+    applyDerivedAuthConfig(fresh, this.resolved, this.secretStore.kind);
+    const boot = evaluateAuthBootability(fresh, this.resolved);
     if (!boot.bootable) {
       return { ok: false, missing: boot.missing, messages: boot.messages };
     }

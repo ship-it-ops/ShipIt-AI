@@ -10,7 +10,13 @@ import { readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve as resolvePath } from 'node:path';
 import { resolveAppCredentials, type AppLike, type GitHubConnectorConfig } from '@shipit-ai/shared';
+import type { SecretsReader } from '../secrets/resolved.js';
 import type { ConnectorRegistry } from './connector-registry.js';
+
+// The global webhook secret is read through the secrets accessor (a live
+// env view — rotation via the admin Settings hub must be visible without a
+// restart), never from process.env directly.
+export type { SecretsReader } from '../secrets/resolved.js';
 
 // ── installation.id -> connector index (T3) ───────────────────────────────
 
@@ -111,7 +117,8 @@ function readPerAppSecret(appId: string, env: NodeJS.ProcessEnv): string | null 
 //     GITHUB_WEBHOOK_SECRET.
 export function resolveWebhookSecret(
   connector: GitHubConnectorConfig,
-  globalApp: AppLike,
+  globalApp: AppLike & { webhookSecretRef?: string },
+  secrets: SecretsReader,
   env: NodeJS.ProcessEnv = process.env,
 ): ResolvedWebhookSecret {
   const resolved = resolveAppCredentials(connector, globalApp);
@@ -123,9 +130,11 @@ export function resolveWebhookSecret(
   }
 
   // No per-App secret. Only a non-overridden (global-App) connector may use
-  // the global env secret; an overridden connector must not downgrade.
+  // the global secret; an overridden connector must not downgrade.
   if (!resolved.overridden) {
-    const globalSecret = (env.GITHUB_WEBHOOK_SECRET ?? '').trim();
+    const globalSecret = (
+      secrets.get(globalApp.webhookSecretRef ?? 'github-webhook-secret') ?? ''
+    ).trim();
     if (globalSecret) return { secret: globalSecret, source: 'global', appId };
     return { secret: null, source: 'none', appId, reason: 'global-empty' };
   }

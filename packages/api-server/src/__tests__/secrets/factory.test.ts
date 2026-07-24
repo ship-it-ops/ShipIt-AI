@@ -2,14 +2,18 @@ import { describe, it, expect } from 'vitest';
 import { makeSecretStore } from '../../secrets/index.js';
 import { FileSecretStore } from '../../secrets/file-store.js';
 import { GsmSecretStore } from '../../secrets/gsm-store.js';
+import type { SecretsRegistry } from '@shipit-ai/shared';
+
+// Minimal registry fixture — makeSecretStore passes it to the store constructors.
+const EMPTY_REG: SecretsRegistry = {} as SecretsRegistry;
 
 describe('makeSecretStore', () => {
   it('defaults to file mode', () => {
-    expect(makeSecretStore({} as NodeJS.ProcessEnv)).toBeInstanceOf(FileSecretStore);
+    expect(makeSecretStore(EMPTY_REG, {} as NodeJS.ProcessEnv)).toBeInstanceOf(FileSecretStore);
   });
 
   it('builds the GSM store when SHIPIT_SECRET_STORE=gsm', () => {
-    const store = makeSecretStore({
+    const store = makeSecretStore(EMPTY_REG, {
       SHIPIT_SECRET_STORE: 'gsm',
       GOOGLE_CLOUD_PROJECT: 'proj',
     } as NodeJS.ProcessEnv);
@@ -17,20 +21,20 @@ describe('makeSecretStore', () => {
   });
 
   it('fails loudly when gsm is selected without GOOGLE_CLOUD_PROJECT', () => {
-    expect(() => makeSecretStore({ SHIPIT_SECRET_STORE: 'gsm' } as NodeJS.ProcessEnv)).toThrow(
-      /GOOGLE_CLOUD_PROJECT/,
-    );
+    expect(() =>
+      makeSecretStore(EMPTY_REG, { SHIPIT_SECRET_STORE: 'gsm' } as NodeJS.ProcessEnv),
+    ).toThrow(/GOOGLE_CLOUD_PROJECT/);
   });
 
   it('rejects unknown store kinds', () => {
-    expect(() => makeSecretStore({ SHIPIT_SECRET_STORE: 'vault' } as NodeJS.ProcessEnv)).toThrow(
-      /Unknown SHIPIT_SECRET_STORE/,
-    );
+    expect(() =>
+      makeSecretStore(EMPTY_REG, { SHIPIT_SECRET_STORE: 'vault' } as NodeJS.ProcessEnv),
+    ).toThrow(/Unknown SHIPIT_SECRET_STORE/);
   });
 
   it('whitespace-only SHIPIT_SECRET_STORE falls back to file mode', () => {
-    expect(makeSecretStore({ SHIPIT_SECRET_STORE: '   ' } as NodeJS.ProcessEnv)).toBeInstanceOf(
-      FileSecretStore,
-    );
+    expect(
+      makeSecretStore(EMPTY_REG, { SHIPIT_SECRET_STORE: '   ' } as NodeJS.ProcessEnv),
+    ).toBeInstanceOf(FileSecretStore);
   });
 });

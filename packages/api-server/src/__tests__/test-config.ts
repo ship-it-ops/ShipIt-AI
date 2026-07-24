@@ -1,9 +1,32 @@
 import type { Config } from '@shipit-ai/shared';
+import { loadSecretsRegistry } from '@shipit-ai/shared';
+import { ResolvedSecrets } from '../secrets/index.js';
+
+// Builds a ResolvedSecrets whose live-view maps every consume:'env' registry
+// key to its corresponding env var name. Reads are live against `env`
+// (defaults to process.env) so tests that already set e.g.
+// process.env.SHIPIT_SESSION_SECRET work unchanged — just pass resolved to
+// createServer instead of relying on the direct process.env read.
+export function makeTestResolved(env: NodeJS.ProcessEnv = process.env): ResolvedSecrets {
+  const registry = loadSecretsRegistry();
+  const liveEnvByKey: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(registry)) {
+    if (entry.consume === 'env' && entry.env) {
+      liveEnvByKey[key] = entry.env;
+    }
+  }
+  return new ResolvedSecrets(new Map(), liveEnvByKey, env);
+}
 
 export function makeTestConfig(overrides: Partial<Config> = {}): Config {
   return {
     backend: {
-      neo4j: { uri: 'bolt://localhost:7687', user: 'neo4j', password: 'test' },
+      neo4j: {
+        uri: 'bolt://localhost:7687',
+        user: 'neo4j',
+        password: 'test',
+        passwordSecret: 'neo4j-aura-password',
+      },
       redis: { url: 'redis://localhost:6379' },
       api: { port: 0, trustProxy: false },
       schema: { path: '/tmp/schema.yaml' },
@@ -36,6 +59,9 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
           privateKeyPath: '',
           webhookSecret: '',
           webhookPublicUrl: 'http://localhost:3001/api/webhooks/github',
+          idSecret: 'github-app-id',
+          webhookSecretRef: 'github-webhook-secret',
+          privateKeySecret: 'github-app-private-key',
         },
         rateLimits: { conditionalRequests: true, maxConcurrentSyncs: 3 },
       },
@@ -49,7 +75,7 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
             enabled: false,
             issuerUrl: '',
             clientId: '',
-            clientSecretEnv: '',
+            clientSecretRef: 'oidc-client-secret',
             scopes: ['openid', 'email', 'profile'],
             emailClaim: 'email',
             displayName: 'OIDC',
@@ -57,7 +83,7 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
           github: {
             enabled: false,
             clientId: '',
-            clientSecretEnv: '',
+            clientSecretRef: 'github-oauth-client-secret',
             allowedOrgs: [],
             displayName: 'GitHub',
           },
@@ -69,7 +95,7 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
           cookieName: 'shipit_sid',
           sameSite: 'lax',
           secure: true,
-          signingSecretEnv: 'SHIPIT_SESSION_SECRET',
+          secretRef: 'session-secret',
         },
       },
       web: {
@@ -84,7 +110,9 @@ export function makeTestConfig(overrides: Partial<Config> = {}): Config {
       enabled: true,
       repo: { owner: '', name: '' },
       defaultLabels: ['user-report'],
+      tokenSecret: 'github-feedback-token',
     },
+    secrets: {},
     ...overrides,
   };
 }

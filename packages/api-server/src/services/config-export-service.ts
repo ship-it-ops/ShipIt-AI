@@ -42,7 +42,7 @@ export class ConfigExportService {
   }
 
   // INVARIANT this denylist leans on: every secret in the config schema is
-  // env-only (fields hold env-var NAMES like clientSecretEnv, or ${ENV}
+  // env-only (fields hold registry KEYS like clientSecretRef, or ${ENV}
   // placeholders that survive unsubstituted). The three deletions below are
   // the only known fields that can carry literal secret material or runtime
   // noise. If you add a config field that holds a literal secret value,

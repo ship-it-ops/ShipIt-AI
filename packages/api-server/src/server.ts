@@ -44,6 +44,7 @@ import type { SetupService } from './services/setup-service.js';
 import type { SettingsService } from './services/settings-service.js';
 import feedbackRoutes from './routes/feedback.js';
 import type { FeedbackService } from './services/feedback-service.js';
+import { envSecretsView, type ResolvedSecrets } from './secrets/index.js';
 
 export interface CreateServerOptions {
   logger?: boolean;
@@ -102,6 +103,11 @@ export interface CreateServerOptions {
   // dedup/enqueue steps (so Redis-less unit servers don't break). Production
   // injects a WebhookRefetchQueue (see index.ts).
   webhookRefetch?: WebhookRefetchPort;
+  // Resolved secret values from the two-phase boot (hydrateSecrets). Optional
+  // so existing createServer test call sites don't need to supply it. Task 8+
+  // will consume it to pass typed secret values directly to services that need
+  // them (FeedbackService, Neo4jService, etc.) instead of reading from process.env.
+  resolved?: ResolvedSecrets;
 }
 
 declare module 'fastify' {
@@ -115,6 +121,7 @@ declare module 'fastify' {
     feedbackService?: FeedbackService;
     eventBus?: EventBusClient;
     webhookRefetch?: WebhookRefetchPort;
+    resolved: ResolvedSecrets;
   }
 }
 
@@ -129,6 +136,11 @@ export async function createServer(opts: CreateServerOptions = {}): Promise<Fast
 
   const setupMode = opts.setupMode ?? false;
   server.decorate('setupMode', setupMode);
+  // Always decorated so routes can consume secrets without null checks.
+  // The fallback (no boot hydration ran — tests, setup mode) is a pure
+  // live-env view, which reads the same env vars hydration would have
+  // populated, so behavior is identical either way.
+  server.decorate('resolved', opts.resolved ?? envSecretsView());
   if (opts.setupService) {
     server.decorate('setupService', opts.setupService);
   }
@@ -147,7 +159,7 @@ export async function createServer(opts: CreateServerOptions = {}): Promise<Fast
     // Setup mode exists precisely because this assert would fail on a
     // fresh deployment — index.ts already evaluated the gates and decided
     // the failure is wizard-fixable.
-    if (!setupMode) assertAuthConfigBootable(opts.config, process.env);
+    if (!setupMode) assertAuthConfigBootable(opts.config, server.resolved);
   }
 
   const authEnabled = opts.config?.accessControl.auth.enabled ?? false;
@@ -192,10 +204,12 @@ export async function createServer(opts: CreateServerOptions = {}): Promise<Fast
   // disabled-auth deployments, and setup mode skip the registration
   // entirely so the boot path doesn't require Redis when auth isn't in play.
   if (enforceAuth) {
+    const resolved = opts.resolved;
+    if (!resolved) throw new AuthConfigError('resolved secrets are required when auth is enabled.');
     if (!opts.redis) {
       throw new AuthConfigError('redis client is required when auth.enabled is true.');
     }
-    const sessionSecret = process.env[opts.config!.accessControl.auth.session.signingSecretEnv]!;
+    const sessionSecret = resolved.require(opts.config!.accessControl.auth.session.secretRef);
     await server.register(cookie);
     await server.register(session, {
       secret: sessionSecret,
@@ -242,9 +256,9 @@ export async function createServer(opts: CreateServerOptions = {}): Promise<Fast
       server.decorate('oidcProvider', opts.oidcProvider);
     } else if (opts.config!.accessControl.auth.providers.oidc.enabled) {
       const oidcCfg = opts.config!.accessControl.auth.providers.oidc;
-      const oidcSecret = process.env[oidcCfg.clientSecretEnv];
+      const oidcSecret = resolved.get(oidcCfg.clientSecretRef);
       if (!oidcSecret) {
-        throw new AuthConfigError(`OIDC clientSecretEnv "${oidcCfg.clientSecretEnv}" is not set.`);
+        throw new AuthConfigError(`OIDC secret "${oidcCfg.clientSecretRef}" is not available.`);
       }
       server.decorate(
         'oidcProvider',
@@ -260,9 +274,9 @@ export async function createServer(opts: CreateServerOptions = {}): Promise<Fast
       server.decorate('githubProvider', opts.githubProvider);
     } else if (opts.config!.accessControl.auth.providers.github.enabled) {
       const ghCfg = opts.config!.accessControl.auth.providers.github;
-      const ghSecret = process.env[ghCfg.clientSecretEnv];
+      const ghSecret = resolved.get(ghCfg.clientSecretRef);
       if (!ghSecret) {
-        throw new AuthConfigError(`GitHub clientSecretEnv "${ghCfg.clientSecretEnv}" is not set.`);
+        throw new AuthConfigError(`GitHub secret "${ghCfg.clientSecretRef}" is not available.`);
       }
       server.decorate(
         'githubProvider',

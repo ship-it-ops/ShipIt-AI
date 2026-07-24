@@ -24,6 +24,7 @@ backend:
     # acknowledge which DB account is being used.
     user: ${NEO4J_USER}
     password: ${NEO4J_PASSWORD}
+    passwordSecret: neo4j-aura-password
   redis:
     # Required everywhere — same rationale as neo4j.uri. Sessions + the
     # connector run store both live here when auth is on, so a missing
@@ -54,6 +55,46 @@ backend:
       hopLimit: 6
       queryTimeoutMs: 10000
 
+# ── Secrets registry ──────────────────────────────────────────────────────
+# Single source of truth for every secret's provenance. Non-secret metadata
+# only (container names + which env var carries the value); safe to commit.
+# Boot hydration reads this to pull values from GSM (prod) into process.env +
+# a typed accessor. Override a container per-env with
+# ${SHIPIT_GSM_SECRET_<NAME>:-default}. See
+# docs/superpowers/specs/2026-07-01-config-driven-secrets-registry-design.md.
+secrets:
+  neo4j-aura-password:
+    { gsmContainer: shipit-neo4j-aura-password, env: NEO4J_PASSWORD, required: true }
+  session-secret:
+    { gsmContainer: shipit-session-secret, env: SHIPIT_SESSION_SECRET, required: true }
+  github-app-private-key:
+    {
+      gsmContainer: shipit-github-app-private-key,
+      consume: file,
+      filePathEnv: GITHUB_APP_PRIVATE_KEY_PATH,
+      writable: true,
+    }
+  github-app-id: { gsmContainer: shipit-github-app-id, env: GITHUB_APP_ID, writable: true }
+  github-webhook-secret:
+    { gsmContainer: shipit-github-webhook-secret, env: GITHUB_WEBHOOK_SECRET, writable: true }
+  github-oauth-client-id:
+    { gsmContainer: shipit-github-oauth-client-id, env: GITHUB_OAUTH_CLIENT_ID, writable: true }
+  github-oauth-client-secret:
+    {
+      gsmContainer: shipit-github-oauth-client-secret,
+      env: GITHUB_OAUTH_CLIENT_SECRET,
+      writable: true,
+    }
+  oidc-client-secret:
+    { gsmContainer: shipit-oidc-client-secret, env: OIDC_CLIENT_SECRET, writable: true }
+  auth-admin-emails:
+    { gsmContainer: shipit-auth-admin-emails, env: SHIPIT_AUTH_ADMINS, writable: true }
+  auth-allow-list-emails:
+    { gsmContainer: shipit-auth-allow-list-emails, env: SHIPIT_AUTH_ALLOWLIST, writable: true }
+  github-feedback-token: { gsmContainer: shipit-github-feedback-token, env: FEEDBACK_GITHUB_TOKEN }
+  setup-completed: { gsmContainer: shipit-setup-completed, consume: store-only, writable: true }
+  connector-apps: { gsmContainer: shipit-connector-apps, consume: store-only, writable: true }
+
 # ── Connectors ────────────────────────────────────────────────────────────
 # External integrations that populate the knowledge graph. Top-level rather
 # than under backend.* because connectors aren't infra the API server hosts;
@@ -66,16 +107,20 @@ backend:
 connectors:
   # GitHub App that backs all per-org github connector instances unless an
   # instance overrides it. App ID and webhook URL are safe to commit via
-  # env-var placeholders; private key path and webhook secret are env-only
-  # (secretlint will block them if pasted directly).
+  # env-var placeholders; the private key is path-only and the webhook
+  # secret never enters the config at all — it is consumed through the
+  # secrets accessor via `webhookSecretRef` below (a live view, so admin
+  # rotation is visible without restart).
   github:
     app:
       id: ${GITHUB_APP_ID:-}
       privateKeyPath: ${GITHUB_APP_PRIVATE_KEY_PATH:-}
-      webhookSecret: ${GITHUB_WEBHOOK_SECRET:-}
       # Public URL GitHub posts webhooks to. Required only when you wire a
       # GitHub connector instance; leave empty otherwise.
       webhookPublicUrl: ${GITHUB_WEBHOOK_PUBLIC_URL:-}
+      idSecret: github-app-id
+      webhookSecretRef: github-webhook-secret
+      privateKeySecret: github-app-private-key
     rateLimits:
       # Opt into Octokit If-None-Match conditional requests to stretch the
       # 5k/hr per-installation budget. Disable if you're debugging fetchers.
@@ -95,10 +140,11 @@ connectors:
 feedback:
   enabled: true
   repo:
-    owner: ${SHIPIT_FEEDBACK_REPO_OWNER:-}
-    name: ${SHIPIT_FEEDBACK_REPO_NAME:-}
+    owner: ${SHIPIT_FEEDBACK_REPO_OWNER:-ship-it-ops}
+    name: ${SHIPIT_FEEDBACK_REPO_NAME:-shipit-ai}
   defaultLabels:
     - user-report
+  tokenSecret: github-feedback-token
 
 frontend:
   api:
@@ -145,10 +191,10 @@ frontend:
 # synthesized from frontend.devUser takes over. The rest of this block
 # stays inert.
 #
-# Secrets NEVER live in YAML — clientSecretEnv / signingSecretEnv hold
-# the *names* of env vars; the api-server resolves the values at boot
-# and refuses to start if any required env var is missing or the
-# signing secret is shorter than 32 chars.
+# Secrets NEVER live in YAML — clientSecretRef / secretRef hold *keys*
+# into the secrets: registry above; the api-server hydrates the values at
+# boot (GSM in prod, env/file locally) and refuses to start if a required
+# secret is missing or the signing secret is shorter than 32 chars.
 accessControl:
   auth:
     enabled: true
@@ -156,8 +202,9 @@ accessControl:
     providers:
       # Generic OIDC — works with any standards-compliant identity provider
       # (Auth0, Okta, Authentik, Keycloak, Microsoft Entra, Google
-      # Workspace, etc.). Flip enabled: true and fill in the issuer URL,
-      # client ID, and clientSecretEnv to use.
+      # Workspace, etc.). Flip enabled: true and fill in the issuer URL
+      # and client ID; the client secret comes from the secrets registry
+      # via clientSecretRef.
       #
       # Callback URL the IdP needs to know:
       #   https://<your-domain>/api/auth/callback/oidc
@@ -165,7 +212,7 @@ accessControl:
         enabled: false
         issuerUrl: ${OIDC_ISSUER_URL:-}
         clientId: ${OIDC_CLIENT_ID:-}
-        clientSecretEnv: OIDC_CLIENT_SECRET
+        clientSecretRef: oidc-client-secret
         scopes: [openid, email, profile]
         emailClaim: email
         # Fallback ensures the YAML load succeeds when OIDC is disabled
@@ -188,7 +235,7 @@ accessControl:
       github:
         enabled: false
         clientId: ${GITHUB_OAUTH_CLIENT_ID:-}
-        clientSecretEnv: GITHUB_OAUTH_CLIENT_SECRET
+        clientSecretRef: github-oauth-client-secret
         # Optional GitHub-org allow-list — empty means any authenticated
         # GitHub user can sign in (which usually isn't what you want in
         # production). Add your org name(s) here to gate sign-in by org
@@ -213,10 +260,11 @@ accessControl:
       cookieName: shipit_sid
       sameSite: lax
       secure: true
-      # 32+ char secret. Boot fails loud when auth.enabled is true and
-      # this env var doesn't resolve to a long-enough value. Generate
-      # with: openssl rand -base64 48
-      signingSecretEnv: SHIPIT_SESSION_SECRET
+      # 32+ char secret, resolved from the secrets registry (carried by
+      # SHIPIT_SESSION_SECRET / GSM shipit-session-secret). Boot fails
+      # loud when auth.enabled is true and it doesn't resolve to a
+      # long-enough value. Generate with: openssl rand -base64 48
+      secretRef: session-secret
 
   # CORS allow-list for the web-UI origin(s). Required when auth is on —
   # the api-server only accepts credentialed cross-origin requests from

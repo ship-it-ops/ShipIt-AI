@@ -8,6 +8,7 @@ import {
   shouldEnterSetupMode,
   type SetupModeDecision,
 } from '../auth-bootability.js';
+import { envSecretsView } from '../secrets/index.js';
 import { makeTestConfig } from './test-config.js';
 
 const SESSION_SECRET = 'a'.repeat(32);
@@ -25,13 +26,13 @@ function bootableAuthConfig(): Config {
 
 describe('evaluateAuthBootability', () => {
   it('is always bootable with auth disabled', () => {
-    const result = evaluateAuthBootability(makeTestConfig(), {} as NodeJS.ProcessEnv);
+    const result = evaluateAuthBootability(makeTestConfig(), envSecretsView({}));
     expect(result).toEqual({ bootable: true, missing: [], messages: [] });
   });
 
   it('passes a fully configured deployment', () => {
     const env = { SHIPIT_SESSION_SECRET: SESSION_SECRET } as NodeJS.ProcessEnv;
-    const result = evaluateAuthBootability(bootableAuthConfig(), env);
+    const result = evaluateAuthBootability(bootableAuthConfig(), envSecretsView(env));
     expect(result.bootable).toBe(true);
     expect(result.missing).toEqual([]);
   });
@@ -40,7 +41,7 @@ describe('evaluateAuthBootability', () => {
     const config = bootableAuthConfig();
     config.accessControl.auth.providers.github.enabled = false;
     const env = { SHIPIT_SESSION_SECRET: SESSION_SECRET } as NodeJS.ProcessEnv;
-    const result = evaluateAuthBootability(config, env);
+    const result = evaluateAuthBootability(config, envSecretsView(env));
     expect(result.bootable).toBe(false);
     expect(result.missing).toEqual(['provider']);
     expect(result.messages[0]).toContain('no provider is enabled');
@@ -50,7 +51,7 @@ describe('evaluateAuthBootability', () => {
     const config = bootableAuthConfig();
     config.accessControl.auth.admins = [];
     const env = { SHIPIT_SESSION_SECRET: SESSION_SECRET } as NodeJS.ProcessEnv;
-    const result = evaluateAuthBootability(config, env);
+    const result = evaluateAuthBootability(config, envSecretsView(env));
     expect(result.missing).toEqual(['admins']);
   });
 
@@ -58,24 +59,24 @@ describe('evaluateAuthBootability', () => {
     const config = bootableAuthConfig();
     config.accessControl.web.allowedOrigins = [];
     const env = { SHIPIT_SESSION_SECRET: SESSION_SECRET } as NodeJS.ProcessEnv;
-    const result = evaluateAuthBootability(config, env);
+    const result = evaluateAuthBootability(config, envSecretsView(env));
     expect(result.missing).toEqual(['allowedOrigins']);
   });
 
   it('reports the sessionSecret gate for missing and too-short values', () => {
     const config = bootableAuthConfig();
-    expect(evaluateAuthBootability(config, {} as NodeJS.ProcessEnv).missing).toEqual([
+    expect(evaluateAuthBootability(config, envSecretsView({})).missing).toEqual(['sessionSecret']);
+    const short = { SHIPIT_SESSION_SECRET: 'short' } as NodeJS.ProcessEnv;
+    expect(evaluateAuthBootability(config, envSecretsView(short)).missing).toEqual([
       'sessionSecret',
     ]);
-    const short = { SHIPIT_SESSION_SECRET: 'short' } as NodeJS.ProcessEnv;
-    expect(evaluateAuthBootability(config, short).missing).toEqual(['sessionSecret']);
   });
 
   it('collects every failing gate (the committed fresh-deploy state)', () => {
     const config = bootableAuthConfig();
     config.accessControl.auth.providers.github.enabled = false;
     config.accessControl.auth.admins = [];
-    const result = evaluateAuthBootability(config, {} as NodeJS.ProcessEnv);
+    const result = evaluateAuthBootability(config, envSecretsView({}));
     expect(result.missing).toEqual(['provider', 'admins', 'sessionSecret']);
   });
 });
@@ -84,17 +85,15 @@ describe('assertAuthConfigBootable', () => {
   it('throws AuthConfigError with the first failing message', () => {
     const config = bootableAuthConfig();
     config.accessControl.auth.providers.github.enabled = false;
-    expect(() => assertAuthConfigBootable(config, {} as NodeJS.ProcessEnv)).toThrow(
-      AuthConfigError,
-    );
-    expect(() => assertAuthConfigBootable(config, {} as NodeJS.ProcessEnv)).toThrow(
+    expect(() => assertAuthConfigBootable(config, envSecretsView({}))).toThrow(AuthConfigError);
+    expect(() => assertAuthConfigBootable(config, envSecretsView({}))).toThrow(
       /no provider is enabled/,
     );
   });
 
   it('does not throw for a bootable config', () => {
     const env = { SHIPIT_SESSION_SECRET: SESSION_SECRET } as NodeJS.ProcessEnv;
-    expect(() => assertAuthConfigBootable(bootableAuthConfig(), env)).not.toThrow();
+    expect(() => assertAuthConfigBootable(bootableAuthConfig(), envSecretsView(env))).not.toThrow();
   });
 });
 
@@ -165,7 +164,7 @@ describe('applyDerivedAuthConfig', () => {
       GITHUB_OAUTH_CLIENT_ID: 'Iv1.abc',
       GITHUB_OAUTH_CLIENT_SECRET: 'hush',
     } as NodeJS.ProcessEnv;
-    const result = applyDerivedAuthConfig(config, env, 'gsm');
+    const result = applyDerivedAuthConfig(config, envSecretsView(env), 'gsm');
     expect(result.derivedGithubProvider).toBe(true);
     expect(config.accessControl.auth.providers.github.enabled).toBe(true);
     expect(config.accessControl.auth.providers.github.clientId).toBe('Iv1.abc');
@@ -177,7 +176,7 @@ describe('applyDerivedAuthConfig', () => {
       GITHUB_OAUTH_CLIENT_ID: 'Iv1.abc',
       GITHUB_OAUTH_CLIENT_SECRET: 'hush',
     } as NodeJS.ProcessEnv;
-    const result = applyDerivedAuthConfig(config, env, 'file');
+    const result = applyDerivedAuthConfig(config, envSecretsView(env), 'file');
     expect(result.derivedGithubProvider).toBe(false);
     expect(config.accessControl.auth.providers.github.enabled).toBe(false);
   });
@@ -185,7 +184,9 @@ describe('applyDerivedAuthConfig', () => {
   it('requires BOTH the client id and secret to derive the provider', () => {
     const config = makeTestConfig();
     const env = { GITHUB_OAUTH_CLIENT_ID: 'Iv1.abc' } as NodeJS.ProcessEnv;
-    expect(applyDerivedAuthConfig(config, env, 'gsm').derivedGithubProvider).toBe(false);
+    expect(applyDerivedAuthConfig(config, envSecretsView(env), 'gsm').derivedGithubProvider).toBe(
+      false,
+    );
   });
 
   it('does not clobber an explicitly configured clientId', () => {
@@ -195,14 +196,14 @@ describe('applyDerivedAuthConfig', () => {
       GITHUB_OAUTH_CLIENT_ID: 'Iv1.from-env',
       GITHUB_OAUTH_CLIENT_SECRET: 'hush',
     } as NodeJS.ProcessEnv;
-    applyDerivedAuthConfig(config, env, 'gsm');
+    applyDerivedAuthConfig(config, envSecretsView(env), 'gsm');
     expect(config.accessControl.auth.providers.github.clientId).toBe('Iv1.from-config');
   });
 
   it('fills empty admins[] from the SHIPIT_AUTH_ADMINS CSV (any store kind)', () => {
     const config = makeTestConfig();
     const env = { SHIPIT_AUTH_ADMINS: ' a@x.com , b@y.com ,' } as NodeJS.ProcessEnv;
-    const result = applyDerivedAuthConfig(config, env, 'file');
+    const result = applyDerivedAuthConfig(config, envSecretsView(env), 'file');
     expect(result.derivedAdmins).toBe(true);
     expect(config.accessControl.auth.admins).toEqual(['a@x.com', 'b@y.com']);
   });
@@ -211,7 +212,7 @@ describe('applyDerivedAuthConfig', () => {
     const config = makeTestConfig();
     config.accessControl.auth.admins = ['configured@example.com'];
     const env = { SHIPIT_AUTH_ADMINS: 'derived@example.com' } as NodeJS.ProcessEnv;
-    const result = applyDerivedAuthConfig(config, env, 'gsm');
+    const result = applyDerivedAuthConfig(config, envSecretsView(env), 'gsm');
     expect(result.derivedAdmins).toBe(false);
     expect(config.accessControl.auth.admins).toEqual(['configured@example.com']);
   });
@@ -224,7 +225,7 @@ describe('applyDerivedAuthConfig — allow-list derivation', () => {
   it('fills empty allowList from the SHIPIT_AUTH_ALLOWLIST CSV (any store kind)', () => {
     const config = makeTestConfig();
     const env = { SHIPIT_AUTH_ALLOWLIST: ' a@x.com , b@y.com ,' } as NodeJS.ProcessEnv;
-    const result = applyDerivedAuthConfig(config, env, 'file');
+    const result = applyDerivedAuthConfig(config, envSecretsView(env), 'file');
     expect(result.derivedAllowList).toBe(true);
     expect(config.accessControl.auth.allowList).toEqual(['a@x.com', 'b@y.com']);
   });
@@ -233,7 +234,7 @@ describe('applyDerivedAuthConfig — allow-list derivation', () => {
     const config = makeTestConfig();
     config.accessControl.auth.allowList = ['configured@example.com'];
     const env = { SHIPIT_AUTH_ALLOWLIST: 'derived@example.com' } as NodeJS.ProcessEnv;
-    const result = applyDerivedAuthConfig(config, env, 'gsm');
+    const result = applyDerivedAuthConfig(config, envSecretsView(env), 'gsm');
     expect(result.derivedAllowList).toBe(false);
     expect(config.accessControl.auth.allowList).toEqual(['configured@example.com']);
   });
@@ -241,7 +242,7 @@ describe('applyDerivedAuthConfig — allow-list derivation', () => {
   it('treats a whitespace-only env value as unset', () => {
     const config = makeTestConfig();
     const env = { SHIPIT_AUTH_ALLOWLIST: ' , ' } as NodeJS.ProcessEnv;
-    const result = applyDerivedAuthConfig(config, env, 'file');
+    const result = applyDerivedAuthConfig(config, envSecretsView(env), 'file');
     expect(result.derivedAllowList).toBe(false);
     expect(config.accessControl.auth.allowList).toEqual([]);
   });

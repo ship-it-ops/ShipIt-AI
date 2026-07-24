@@ -1,6 +1,10 @@
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { Redis } from 'ioredis';
-import { findConfigPaths, type GitHubConnectorConfig } from '@shipit-ai/shared';
+import {
+  findConfigPaths,
+  loadSecretsRegistry,
+  type GitHubConnectorConfig,
+} from '@shipit-ai/shared';
 import { loadConfig } from './config.js';
 import { createServer } from './server.js';
 import { Neo4jService } from './services/neo4j-service.js';
@@ -29,7 +33,7 @@ import {
   evaluateAuthBootability,
   shouldEnterSetupMode,
 } from './auth-bootability.js';
-import { hydrateFromStore, makeSecretStore } from './secrets/index.js';
+import { hydrateSecrets, makeSecretStore } from './secrets/index.js';
 
 export { createServer } from './server.js';
 export type { CreateServerOptions } from './server.js';
@@ -67,7 +71,7 @@ export { Neo4jService } from './services/neo4j-service.js';
 export type { GraphStats, NeighborhoodResult } from './services/neo4j-service.js';
 export {
   makeSecretStore,
-  hydrateFromStore,
+  hydrateSecrets,
   FileSecretStore,
   GsmSecretStore,
   SecretWriteForbiddenError,
@@ -79,9 +83,13 @@ async function main() {
   // hydration populates the env vars (GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_PATH,
   // OAuth/OIDC secrets) that the chart-seeded config's ${ENV} placeholders
   // reference. In file mode (default) this is a no-op.
-  const secretStore = makeSecretStore();
-  const hydration = await hydrateFromStore(secretStore);
-  if (hydration.hydrated.length > 0) {
+  const registry = loadSecretsRegistry();
+  const secretStore = makeSecretStore(registry);
+  const hydration = await hydrateSecrets(secretStore, registry);
+  const resolved = hydration.resolved;
+  // gsm-gated: file mode also snapshots env-carried values into `hydrated`,
+  // but nothing was pulled from GSM — logging would mislead (review IN7).
+  if (secretStore.kind === 'gsm' && hydration.hydrated.length > 0) {
     console.log(
       `Hydrated ${hydration.hydrated.length} secret(s) from GSM: ${hydration.hydrated.join(', ')}` +
         (hydration.pemPath ? ` (PEM at ${hydration.pemPath})` : ''),
@@ -98,8 +106,8 @@ async function main() {
   // client present → providers.github.enabled, SHIPIT_AUTH_ADMINS →
   // admins[]). This is what lets a deployment leave setup mode without a
   // manual config edit — the committed yaml stays safe-by-default.
-  applyDerivedAuthConfig(config, process.env, secretStore.kind);
-  const boot = evaluateAuthBootability(config, process.env);
+  applyDerivedAuthConfig(config, resolved, secretStore.kind);
+  const boot = evaluateAuthBootability(config, resolved);
 
   // SETUP MODE decision — full predicate (and its security rationale)
   // lives in shouldEnterSetupMode(); see auth-bootability.ts. The
@@ -147,7 +155,7 @@ async function main() {
       keyDir: process.env.SHIPIT_GITHUB_APP_KEY_DIR,
       secretStore,
     });
-    const setupService = new SetupService({ secretStore });
+    const setupService = new SetupService({ secretStore, resolved });
 
     const server = await createServer({
       logger: true,
@@ -175,7 +183,16 @@ async function main() {
   const { neo4j, schema, api } = config.backend;
   const schemaPath = isAbsolute(schema.path) ? schema.path : resolve(configDir, schema.path);
 
-  const neo4jService = new Neo4jService(neo4j.uri, neo4j.user, neo4j.password);
+  // Password provenance: the accessor (GSM hydration / NEO4J_PASSWORD env)
+  // is the source of truth; the config value remains as the carrier for
+  // local-dev shipit.config.local.yaml literals (an explicit non-goal to
+  // change) and for the core-writer process, which consumes the ${ENV}
+  // substitution without running secret hydration.
+  const neo4jService = new Neo4jService(
+    neo4j.uri,
+    neo4j.user,
+    resolved.get(neo4j.passwordSecret) ?? neo4j.password,
+  );
   const schemaService = new SchemaService(schemaPath);
 
   // GraphEditEvent audit-retention cleanup. Bounds the otherwise-unbounded
@@ -259,16 +276,17 @@ async function main() {
   // "should-exist-but-missing". Non-fatal; the receiver still boots.
   for (const connector of connectorRegistry.list()) {
     if (connector.type !== 'github') continue;
-    const resolved = resolveWebhookSecret(
+    const wh = resolveWebhookSecret(
       connector as GitHubConnectorConfig,
       config.connectors.github.app,
+      resolved,
       process.env,
     );
-    if (resolved.appId && resolved.source === 'none') {
+    if (wh.appId && wh.source === 'none') {
       console.warn(
-        `WEBHOOK SECRET MISSING: connector "${connector.id}" resolves App id ${resolved.appId} ` +
+        `WEBHOOK SECRET MISSING: connector "${connector.id}" resolves App id ${wh.appId} ` +
           `but has no materialized per-App webhook secret and no usable global secret ` +
-          `(reason=${resolved.reason}). Its webhook deliveries will be acknowledged without ` +
+          `(reason=${wh.reason}). Its webhook deliveries will be acknowledged without ` +
           `verification/refetch until the secret is materialized.`,
       );
     }
@@ -374,13 +392,17 @@ async function main() {
     registry: connectorRegistry,
     connectorAppStore,
     webhookRefetch: webhookRefetch ?? undefined,
+    resolved,
   });
 
   // Backs the in-app "Report a problem" widget. Live reference to
-  // config.feedback; files issues via the server-held FEEDBACK_GITHUB_TOKEN
-  // PAT. Reuses the run-store Redis client for per-user rate limiting.
+  // config.feedback; reads the issue-filing PAT from the resolved secrets
+  // accessor via config.feedback.tokenSecret. Reuses the run-store Redis
+  // client for per-user rate limiting.
   const feedbackService = new FeedbackService({
     feedback: config.feedback,
+    tokenSecret: config.feedback.tokenSecret,
+    resolved,
     redis: runStoreRedis,
   });
 
@@ -397,7 +419,7 @@ async function main() {
     // Active-mode /api/setup/status (behind auth) — used by the wizard's
     // post-restart poll and for ops debugging. The mutating setup routes
     // 409 outside setup mode.
-    setupService: new SetupService({ secretStore }),
+    setupService: new SetupService({ secretStore, resolved }),
     configPaths: { basePath: configPaths.basePath, localPath },
     config,
     // Same client the scheduler publishes through; lets the login callback
@@ -412,6 +434,7 @@ async function main() {
     // (the default), the session store is never registered so the absence
     // of a Redis URL stays a soft warning rather than a hard boot failure.
     redis: runStoreRedis ?? undefined,
+    resolved,
   });
 
   // Start any pre-configured connectors after the server is constructed so
