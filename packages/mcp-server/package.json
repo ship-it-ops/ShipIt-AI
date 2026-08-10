@@ -31,9 +31,9 @@
     "@shipit-ai/shared": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^26.0.0",
-    "tsx": "^4.22.4",
+    "@types/node": "^26.1.2",
+    "tsx": "^4.23.10",
     "typescript": "^6.0.3",
-    "vitest": "^4.0.0"
+    "vitest": "^4.1.10"
   }
 }
