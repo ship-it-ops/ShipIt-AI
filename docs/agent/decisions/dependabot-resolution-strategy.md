@@ -2,7 +2,7 @@
 type: decision
 status: active
 created: 2026-05-24
-updated: 2026-06-20
+updated: 2026-08-21
 author: claude-opus-4-7
 tags: [security, dependabot, pnpm, supply-chain]
 importance: core
@@ -212,6 +212,70 @@ not a function`. `eslint-config-next@16.2.9` pulls `eslint-plugin-import@2.32.0`
   +js-yaml, +@babel/core.
 - `packages/web-ui/package.json` — tailwindcss, @tailwindcss/postcss, eslint-config-next, axe-core.
 - `packages/api-server/package.json`, `packages/event-bus/package.json` — bullmq.
+- `pnpm-lock.yaml`.
+
+## Update 2026-08-21 — fifth round (`dependabot-round-5`)
+
+9 open Dependabot PRs (oldest 2026-06-01) + 33 `pnpm audit` advisories (17 high / 14
+moderate / 2 low — all transitive, accumulated since the June sweep). Applied layers 1+2;
+re-tested both long-deferred majors empirically and re-deferred both with fresh evidence.
+
+### Applied — version bumps (layer 1)
+
+- **#107 production-patches (15):** @fastify/session ^11.1.2, openid-client ^6.8.5
+  (api-server); react/react-dom ^19.2.8, @tanstack/react-query ^5.101.4, zustand ^5.0.15,
+  cytoscape ^3.34.1, @xyflow/react ^12.11.3, 7× @ship-it-ui/\* (web-ui).
+- **#106 dev group (16):** secretlint + preset ^13.0.4, @types/node ^26.1.2,
+  lint-staged ^17.3.0, prettier ^3.9.6, prettier-plugin-tailwindcss ^0.8.1, tsx ^4.23.10,
+  turbo ^2.10.8, vitest ^4.1.10, @types/ioredis-mock ^8.2.8, tailwindcss +
+  @tailwindcss/postcss ^4.3.3, eslint-config-next ^16.3.0, @testing-library/user-event
+  ^14.6.3, axe-core ^4.13.0.
+- **#102 next ^16.2.11** — carries HIGH security fixes (Server-Actions DoS
+  GHSA-m99w-x7hq-7vfj, middleware bypass GHSA-6gpp-xcg3-4w24, SSRF GHSA-p9j2-gv94-2wf4).
+- **#104 postcss** — override bumped to ^8.5.26 (root + web-ui declared).
+- **#84 lucide-react ^1.22.0.**
+- **#97/#79 CI:** actions/checkout@v7 + actions/setup-node@v7 in `ci.yml` (12 pins).
+
+**Gotcha — mixed vitest resolutions break jest-dom matcher types.** Bumping only the ROOT
+`vitest` to ^4.1.10 left the 8 workspace `vitest: ^4.0.0` declarations locked at 4.1.9 →
+two vitest instances in the lockfile → web-ui typecheck failed with `Property
+'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'` (jest-dom's
+`declare module 'vitest'` augmentation merged into the instance web-ui's types didn't
+resolve). Fix: `pnpm -r update vitest` to unify the whole workspace on one version
+(4.1.11). When bumping vitest, always bump it lockfile-wide.
+
+### Applied — security overrides refresh (layer 2), `pnpm audit` → clean
+
+Stale-minimum refreshes: hono ^4.12.34, @hono/node-server ^1.19.15, fast-uri ^3.1.5,
+brace-expansion@1 ^1.1.18 / @5 ^5.0.9, ip-address ^10.3.1, undici ^7.29.0, js-yaml ^4.3.1.
+NEW entries (25 total now): brace-expansion@2 ^2.1.4, protobufjs ^7.6.5 (via
+@kubernetes/client-node), find-my-way ^9.7.0 (fastify's router — verify api-server tests
+after bumping), body-parser ^2.3.0. Override list is at 25 — past the ~15 revisit-trigger
+smell; next round should check which entries are obsolete (parent already ships the
+patched range) and prune.
+
+### Re-deferred — both majors re-tested empirically this round, still blocked
+
+- **#40 eslint 9→10:** `eslint-config-next@16.3.0` did NOT fix it — reproduced the exact
+  same `TypeError: scopeManager.addGlobals is not a function`; it still pulls
+  `eslint-plugin-react@7.37.5` whose peer caps at `eslint ^9.7`. Revisit on the next
+  eslint-config-next minor: retry `pnpm --filter web-ui lint` after a trial bump.
+- **#46 @vitejs/plugin-react 5→6:** still vite-8-only — fails at web-ui test time with
+  `ERR_PACKAGE_PATH_NOT_EXPORTED` against our exact-pinned `vite 7.3.5` (pin itself held
+  by the GHSA fixes from round 4). Revisit when the security-patched vite line moves to 8.
+
+### Verification (this round)
+
+- `pnpm audit` → No known vulnerabilities found (33 → 0).
+- `pnpm turbo typecheck` → 14/14; `test` → 14/14; `build` → 9/9 (all --force);
+  `lint` → 0 errors (18 pre-existing warnings, unchanged).
+
+### Critical files touched (this round)
+
+- `package.json` (root) — 9 devDep bumps; overrides: 8 refreshed + 4 new (25 total).
+- `packages/web-ui/package.json` — 22 bumps (next, react, DS packages, toolchain).
+- `packages/api-server/package.json` — @fastify/session, openid-client, @types/\*.
+- `.github/workflows/ci.yml` — checkout@v7, setup-node@v7.
 - `pnpm-lock.yaml`.
 
 ## Related
